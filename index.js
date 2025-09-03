@@ -1,6 +1,6 @@
 // Importation des modules nécessaires
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
-const fs = require('fs').promises; // Utilisation de la version basée sur les promesses pour un code plus propre
+const fs = require('fs').promises;
 
 // Fonction principale asynchrone pour générer le certificat
 async function createCertificate() {
@@ -33,7 +33,7 @@ async function createCertificate() {
       y: height - 100,
       size: fontSize,
       font: helveticaBoldFont,
-      color: rgb(0, 0.53, 0.71), // Couleur bleue
+      color: rgb(0, 0.53, 0.71),
     });
 
     // Dessin des autres textes
@@ -49,7 +49,7 @@ async function createCertificate() {
       y: height - 250,
       size: 15,
       font: helveticaBoldFont,
-      color: rgb(0.2, 0.2, 0.2), // Couleur gris foncé
+      color: rgb(0.2, 0.2, 0.2),
     });
 
     // Enregistrement du PDF sous forme de tableau de bytes
