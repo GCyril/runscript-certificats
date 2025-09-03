@@ -39,11 +39,11 @@ const s3Client = new S3Client({
 // =====================================
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static('public')); // C'est cette ligne qui sert le dossier "public"
 
 // Endpoint pour tester la connexion à l'API RunScript
 app.get('/test', async (req, res) => {
@@ -219,8 +219,8 @@ app.listen(port, () => {
     console.log('');
     console.log('🚀 Serveur RunScript démarré !');
     console.log('================================');
-    console.log('📄 Interface: http://localhost:' + port);
-    console.log('🧪 Test API: http://localhost:' + port + '/test');
+    console.log(`📄 Interface: http://localhost:${port}`);
+    console.log(`🧪 Test API: http://localhost:${port}/test`);
     console.log('');
     console.log('Configuration:');
     console.log('- API Key: ' + (RUNSCRIPT_KEY ? RUNSCRIPT_KEY.substring(0, 5) + '...' : '...'));
