@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 
 const fs = require('fs-extra');
 const axios = require('axios');
+const path = require('path');
 // Importations de la bibliothèque AWS SDK v3
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
@@ -17,23 +18,10 @@ const S3_REGION = process.env.S3_REGION;
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 
-// --- CONFIGURATION AWS S3 ---
-// C'est la configuration v2 de AWS SDK, que vous avez aussi dans votre code original.
-// Pour ne pas créer de confusion, nous allons la commenter, car vous n'en avez pas besoin.
-// const AWS = require('aws-sdk');
-// AWS.config.update({
-//     accessKeyId: AWS_ACCESS_KEY_ID,
-//     secretAccessKey: AWS_SECRET_ACCESS_KEY,
-//     region: S3_REGION
-// });
-// const s3 = new AWS.S3();
-// =====================================
-
 const app = express();
 const port = 3000;
 
 // Créez une instance du client S3 v3
-// Enlève l'endpoint forcé pour permettre au SDK d'utiliser le bon endpoint régional.
 const s3Client = new S3Client({
     region: S3_REGION,
     credentials: {
@@ -43,39 +31,119 @@ const s3Client = new S3Client({
 });
 
 app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
-// Test de l'API RunScript
+// Ajout de la route pour servir la page HTML de l'interface utilisateur
+app.get('/', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Générateur de Certificats</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                body {
+                    font-family: sans-serif;
+                }
+            </style>
+        </head>
+        <body class="bg-gray-100 p-8">
+            <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md">
+                <h1 class="text-2xl font-bold mb-4 text-center">Générateur de Certificats</h1>
+                <p class="text-gray-600 mb-6 text-center">Entrez un nom pour générer un certificat PDF.</p>
+
+                <div class="mb-4">
+                    <label for="recipientName" class="block text-sm font-medium text-gray-700">Nom du destinataire:</label>
+                    <input type="text" id="recipientName" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+
+                <div class="mb-4">
+                    <label for="templateName" class="block text-sm font-medium text-gray-700">Nom du modèle (e.g., eotm):</label>
+                    <input type="text" id="templateName" value="eotm" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <button id="generateBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200">
+                        Générer le Certificat
+                    </button>
+                    <div id="loadingIndicator" class="hidden text-sm text-gray-500">Génération...</div>
+                </div>
+
+                <div id="result" class="mt-6 p-4 bg-gray-50 rounded-md">
+                    <p class="text-sm text-gray-500">Le certificat généré apparaîtra ici.</p>
+                </div>
+            </div>
+
+            <script>
+                document.getElementById('generateBtn').addEventListener('click', async () => {
+                    const recipientName = document.getElementById('recipientName').value;
+                    const templateName = document.getElementById('templateName').value;
+                    const resultDiv = document.getElementById('result');
+                    const loadingIndicator = document.getElementById('loadingIndicator');
+                    const generateBtn = document.getElementById('generateBtn');
+
+                    if (!recipientName) {
+                        alert('Veuillez entrer un nom de destinataire.');
+                        return;
+                    }
+
+                    // Affiche le chargement et désactive le bouton
+                    resultDiv.innerHTML = '<p class="text-sm text-yellow-600">Génération du certificat en cours...</p>';
+                    loadingIndicator.classList.remove('hidden');
+                    generateBtn.disabled = true;
+
+                    try {
+                        const response = await fetch('/generate-certificate', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ recipientName, templateName }),
+                        });
+
+                        const data = await response.json();
+
+                        if (data.status === 'OK') {
+                            resultDiv.innerHTML = \`<p class="text-sm text-green-600">Certificat généré avec succès !</p><p class="mt-2"><a href="\${data.pdfUrl}" target="_blank" class="text-blue-500 hover:underline">Ouvrir le Certificat</a></p>\`;
+                        } else {
+                            resultDiv.innerHTML = \`<p class="text-sm text-red-600">Erreur: \${data.message}</p><p class="text-xs text-red-400 mt-1">Détails: \${data.details}</p>\`;
+                        }
+                    } catch (error) {
+                        resultDiv.innerHTML = \`<p class="text-sm text-red-600">Erreur de connexion au serveur: \${error.message}</p>\`;
+                    } finally {
+                        // Cache le chargement et réactive le bouton
+                        loadingIndicator.classList.add('hidden');
+                        generateBtn.disabled = false;
+                    }
+                });
+            </script>
+        </body>
+        </html>
+    `);
+});
+
+// Routes existantes pour les APIs
 app.get('/test', async (req, res) => {
     try {
         console.log('🧪 Test de connexion RunScript...');
-
         const auth = {
             username: RUNSCRIPT_KEY,
             password: RUNSCRIPT_SECRET
         };
-
         const testData = {
             inputs: [],
             outputs: [],
             script: "app.consoleout('Test');",
-            
         };
-
-        const response = await axios.post(
-            'https://runscript.typefi.com/api/v2/job',
-            testData,
-            { auth: auth }
-        );
-
+        const response = await axios.post('https://runscript.typefi.com/api/v2/job', testData, { auth: auth });
         console.log('✅ Test réussi:', response.data);
-
         res.json({
             status: 'OK',
             message: 'Connexion RunScript réussie!',
             jobId: response.data._id
         });
-
     } catch (error) {
         console.error('❌ Erreur:', error.message);
         res.status(500).json({
@@ -85,7 +153,6 @@ app.get('/test', async (req, res) => {
         });
     }
 });
-
 
 // Générer le certificat via RunScript
 app.post('/generate-certificate', async (req, res) => {
