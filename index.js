@@ -11,9 +11,17 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 // ====== GESTION DES VARIABLES D'ENVIRONNEMENT ======
 require('dotenv').config();
 
+// Variables d'environnement pour l'authentification RunScript
 const RUNSCRIPT_KEY = process.env.RUNSCRIPT_KEY;
 const RUNSCRIPT_SECRET = process.env.RUNSCRIPT_SECRET;
+
+// Variables d'environnement pour les buckets S3
+// Ce bucket contient les fichiers modèles Indesign et les polices (fichiersrunscript)
+const S3_TEMPLATES_BUCKET = process.env.S3_TEMPLATES_BUCKET;
+// Ce bucket contiendra les certificats PDF générés (runscript58)
 const S3_BUCKET = process.env.S3_BUCKET;
+
+// Variables d'environnement pour la configuration AWS
 const S3_REGION = process.env.S3_REGION;
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
@@ -79,7 +87,6 @@ app.get('/test', async (req, res) => {
 });
 
 
-
 // Endpoint pour générer le certificat
 app.post('/generate-certificate', async (req, res) => {
     try {
@@ -102,7 +109,8 @@ app.post('/generate-certificate', async (req, res) => {
                     name: "eotm.indd",
                     location: {
                         scheme: "s3",
-                        bucket: S3_BUCKET,
+                        // Utilisation du bucket qui contient les templates et les polices
+                        bucket: S3_TEMPLATES_BUCKET,
                         key: `${templateName}.indd`
                     }
                 },
@@ -110,7 +118,8 @@ app.post('/generate-certificate', async (req, res) => {
                     name: "Brush Script MT Italic.ttf",
                     location: {
                         scheme: "s3",
-                        bucket: S3_BUCKET,
+                        // Utilisation du bucket qui contient les templates et les polices
+                        bucket: S3_TEMPLATES_BUCKET,
                         key: "Brush Script MT Italic.ttf"
                     }
                 }
@@ -120,11 +129,9 @@ app.post('/generate-certificate', async (req, res) => {
                     name: "certificate.pdf",
                     location: {
                         scheme: "s3",
+                        // Utilisation du bucket qui contiendra les certificats
                         bucket: S3_BUCKET,
-                        // --- MODIFICATION ICI ---
-                        // Ajout du dossier 'certificates/' au chemin du fichier de sortie
                         key: `certificates/${studentName}.pdf`
-                        // ------------------------
                     }
                 }
             ],
@@ -217,6 +224,7 @@ app.listen(port, () => {
     console.log('');
     console.log('Configuration:');
     console.log('- API Key: ' + (RUNSCRIPT_KEY ? RUNSCRIPT_KEY.substring(0, 5) + '...' : '...'));
-    console.log('- S3 Bucket: ' + S3_BUCKET);
+    console.log('- S3 Templates Bucket: ' + S3_TEMPLATES_BUCKET);
+    console.log('- S3 Certificates Bucket: ' + S3_BUCKET);
     console.log('- S3 Region: ' + S3_REGION);
 });
