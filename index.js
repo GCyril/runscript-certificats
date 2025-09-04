@@ -2,11 +2,11 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs-extra');
 const axios = require('axios');
+const path = require('path'); // Ajoutez le module 'path'
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 // ====== GESTION DES VARIABLES D'ENVIRONNEMENT ======
-// Les variables d'environnement sont chargées automatiquement sur Render.
 const RUNSCRIPT_KEY = process.env.RUNSCRIPT_KEY;
 const RUNSCRIPT_SECRET = process.env.RUNSCRIPT_SECRET;
 const S3_BUCKET = process.env.S3_BUCKET;
@@ -18,8 +18,9 @@ const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Utiliser 'express.static' pour servir les fichiers statiques depuis le répertoire racine
-app.use(express.static('.'));
+// Utiliser express.static pour servir les fichiers statiques
+// C'est la ligne cruciale qui indique au serveur où trouver le dossier 'public'
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
 
 // --- CONFIGURATION AWS S3 ---
@@ -44,13 +45,9 @@ async function generateS3UploadUrl(key, contentType) {
 
 // Route pour la page d'accueil (sert index.html)
 app.get('/', (req, res) => {
-    // S'assurer que le fichier index.html existe avant de l'envoyer
-    const filePath = `${__dirname}/index.html`;
-    if (fs.existsSync(filePath)) {
-        res.sendFile(filePath);
-    } else {
-        res.send('<h1>Serveur RunScript opérationnel</h1><p>index.html manquant</p>');
-    }
+    // Le serveur sert automatiquement index.html depuis le dossier 'public'
+    // car c'est le fichier par défaut de express.static
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Route pour la génération du certificat
@@ -110,9 +107,6 @@ app.post('/generate', async (req, res) => {
         const jobId = response.data._id;
         console.log('📋 Job ID:', jobId);
 
-        // Cette logique de polling doit être gérée côté client pour éviter le timeout du serveur.
-        // Pour un déploiement simple sur Render, nous allons simplement répondre
-        // immédiatement avec le JobId et laisser le client vérifier le statut.
         res.json({
             status: 'OK',
             message: 'Demande de génération soumise. Veuillez vérifier l\'état du job.',
