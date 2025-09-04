@@ -1,33 +1,28 @@
-// Importation des modules nécessaires
 const express = require('express');
 const bodyParser = require('body-parser');
-
 const fs = require('fs-extra');
 const axios = require('axios');
-// Importations de la bibliothèque AWS SDK v3
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 // ====== GESTION DES VARIABLES D'ENVIRONNEMENT ======
-require('dotenv').config();
-
-// Variables d'environnement pour l'authentification RunScript
+// Les variables d'environnement sont chargées automatiquement sur Render.
 const RUNSCRIPT_KEY = process.env.RUNSCRIPT_KEY;
 const RUNSCRIPT_SECRET = process.env.RUNSCRIPT_SECRET;
-
-// Variables d'environnement pour les buckets S3
-// Ce bucket contient les fichiers modèles Indesign et les polices (fichiersrunscript)
-const S3_TEMPLATES_BUCKET = process.env.S3_TEMPLATES_BUCKET;
-// Ce bucket contiendra les certificats PDF générés (runscript58)
 const S3_BUCKET = process.env.S3_BUCKET;
-
-// Variables d'environnement pour la configuration AWS
 const S3_REGION = process.env.S3_REGION;
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+// =================================================
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Utiliser 'express.static' pour servir les fichiers statiques depuis le répertoire racine
+app.use(express.static('.'));
+app.use(bodyParser.json());
 
 // --- CONFIGURATION AWS S3 ---
-// Créez une instance du client S3 v3
 const s3Client = new S3Client({
     region: S3_REGION,
     credentials: {
@@ -35,47 +30,135 @@ const s3Client = new S3Client({
         secretAccessKey: AWS_SECRET_ACCESS_KEY
     },
 });
+// =============================
 
-// =====================================
+// Fonction pour générer une URL pré-signée pour l'upload (PutObjectCommand) sur S3
+async function generateS3UploadUrl(key, contentType) {
+    const command = new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        ContentType: contentType,
+    });
+    return getSignedUrl(s3Client, command, { expiresIn: 60 });
+}
 
-const app = express();
-const port = process.env.PORT || 3000;
+// Route pour la page d'accueil (sert index.html)
+app.get('/', (req, res) => {
+    // S'assurer que le fichier index.html existe avant de l'envoyer
+    const filePath = `${__dirname}/index.html`;
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.send('<h1>Serveur RunScript opérationnel</h1><p>index.html manquant</p>');
+    }
+});
 
-// Middleware
-app.use(bodyParser.json());
-app.use(express.static('public')); // C'est cette ligne qui sert le dossier "public"
-
-// Endpoint pour tester la connexion à l'API RunScript
-app.get('/test', async (req, res) => {
+// Route pour la génération du certificat
+app.post('/generate', async (req, res) => {
     try {
-        console.log('🧪 Test de connexion RunScript...');
+        console.log('📝 Nouvelle demande de certificat pour:', req.body.name);
+        const name = req.body.name;
+        const s3Key = `certificates/${Date.now()}_${name.replace(/ /g, '_')}.pdf`;
+
+        // Lire le script JSX
+        const script = await fs.readFile('./script.jsx', 'utf8');
+
+        // Générer une URL pré-signée S3 pour l'upload du PDF
+        const presignedS3UploadUrl = await generateS3UploadUrl(s3Key, 'application/pdf');
+        console.log(`🔗 URL d'upload S3 pré-signée créée pour le compartiment "${S3_BUCKET}".`);
+
+        const data = {
+            inputs: [
+                {
+                    href: 'https://dl.dropboxusercontent.com/scl/fi/da7pccjrm2y3ysw92eidr/eotm.indd?rlkey=gwrzrpx9aokqd5b0q9qaaq9p3',
+                    path: 'eotm.indd'
+                },
+                {
+                    href: 'https://dl.dropboxusercontent.com/scl/fi/avajg3zr08hzi6n29q7na/eotm.pdf?rlkey=ni38skm462tajczfetbteosc3',
+                    path: 'eotm.pdf'
+                },
+                {
+                    href: 'https://dl.dropboxusercontent.com/scl/fi/zh2rz5f4wikkrw1ju2p3h/Brush-Script-MT-Italic.ttf?rlkey=i841j1j8vn2io1ag84sofkkbg',
+                    path: 'Document Fonts/Brush Script MT Italic.ttf'
+                }
+            ],
+            outputs: [
+                {
+                    path: 'certificate.pdf',
+                    href: presignedS3UploadUrl
+                }
+            ],
+            args: [
+                { name: 'Name', value: name }
+            ],
+            script: script,
+        };
+
+        console.log('🚀 Envoi du job à RunScript...');
 
         const auth = {
             username: RUNSCRIPT_KEY,
             password: RUNSCRIPT_SECRET
         };
 
+        const response = await axios.post(
+            'https://runscript.typefi.com/api/v2/job?async=true',
+            data,
+            { auth: auth }
+        );
+
+        const jobId = response.data._id;
+        console.log('📋 Job ID:', jobId);
+
+        // Cette logique de polling doit être gérée côté client pour éviter le timeout du serveur.
+        // Pour un déploiement simple sur Render, nous allons simplement répondre
+        // immédiatement avec le JobId et laisser le client vérifier le statut.
+        res.json({
+            status: 'OK',
+            message: 'Demande de génération soumise. Veuillez vérifier l\'état du job.',
+            jobId: jobId
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur:', error.message);
+        res.status(500).json({
+            error: 'Erreur lors de la génération',
+            details: error.message
+        });
+    }
+});
+
+// Route de test
+app.get('/test', async (req, res) => {
+    try {
+        console.log('🧪 Test de connexion RunScript...');
+        if (!RUNSCRIPT_KEY || !RUNSCRIPT_SECRET) {
+            console.error('❌ Erreur: Clés RunScript manquantes!');
+            return res.status(500).json({
+                status: 'ERROR',
+                message: 'Clés API RunScript manquantes. Veuillez vérifier la configuration sur Render.'
+            });
+        }
+        const auth = {
+            username: RUNSCRIPT_KEY,
+            password: RUNSCRIPT_SECRET
+        };
         const testData = {
             inputs: [],
             outputs: [],
             script: "app.consoleout('Test');",
-            
         };
-
         const response = await axios.post(
             'https://runscript.typefi.com/api/v2/job',
             testData,
             { auth: auth }
         );
-
         console.log('✅ Test réussi:', response.data);
-
         res.json({
             status: 'OK',
             message: 'Connexion RunScript réussie!',
             jobId: response.data._id
         });
-
     } catch (error) {
         console.error('❌ Erreur:', error.message);
         res.status(500).json({
@@ -86,145 +169,11 @@ app.get('/test', async (req, res) => {
     }
 });
 
-
-// Endpoint pour générer le certificat
-app.post('/generate-certificate', async (req, res) => {
-    try {
-        console.log('✨ Génération de certificat demandée...');
-        const { studentName, templateName } = req.body;
-
-        if (!studentName || !templateName) {
-            return res.status(400).json({ status: 'ERROR', message: 'Nom de l\'étudiant et nom du modèle sont requis.' });
-        }
-
-        const auth = {
-            username: RUNSCRIPT_KEY,
-            password: RUNSCRIPT_SECRET
-        };
-
-        // Données d'entrée pour la tâche RunScript
-        const runscriptData = {
-            inputs: [
-                {
-                    name: "eotm.indd",
-                    location: {
-                        scheme: "s3",
-                        // Utilisation du bucket qui contient les templates et les polices
-                        bucket: S3_TEMPLATES_BUCKET,
-                        key: `${templateName}.indd`
-                    }
-                },
-                {
-                    name: "Brush Script MT Italic.ttf",
-                    location: {
-                        scheme: "s3",
-                        // Utilisation du bucket qui contient les templates et les polices
-                        bucket: S3_TEMPLATES_BUCKET,
-                        key: "Brush Script MT Italic.ttf"
-                    }
-                }
-            ],
-            outputs: [
-                {
-                    name: "certificate.pdf",
-                    location: {
-                        scheme: "s3",
-                        // Utilisation du bucket qui contiendra les certificats
-                        bucket: S3_BUCKET,
-                        key: `certificates/${studentName}.pdf`
-                    }
-                }
-            ],
-            script: "jsx:script.jsx",
-            scriptArgs: [
-                {
-                    name: "Name",
-                    value: studentName
-                }
-            ],
-            metadata: [
-                {
-                    name: "template",
-                    value: templateName
-                },
-                {
-                    name: "recipient",
-                    value: studentName
-                }
-            ]
-        };
-
-        // Envoi de la tâche à RunScript
-        const response = await axios.post(
-            'https://runscript.typefi.com/api/v2/job',
-            runscriptData,
-            { auth: auth }
-        );
-
-        const jobId = response.data._id;
-        console.log(`✅ Tâche RunScript soumise avec l'ID: ${jobId}`);
-
-        // Attendre que la tâche soit terminée
-        const jobStatus = await new Promise(resolve => {
-            const checkStatus = async () => {
-                const statusResponse = await axios.get(
-                    `https://runscript.typefi.com/api/v2/job/${jobId}`,
-                    { auth: auth }
-                );
-
-                const status = statusResponse.data.status;
-                if (status === 'complete' || status === 'error') {
-                    resolve(statusResponse.data);
-                } else {
-                    setTimeout(checkStatus, 3000); // Vérifier toutes les 3 secondes
-                }
-            };
-            checkStatus();
-        });
-
-        if (jobStatus.status === 'error') {
-            console.error('❌ Tâche RunScript échouée:', jobStatus);
-            return res.status(500).json({ status: 'ERROR', message: 'La génération du certificat a échoué.', details: jobStatus });
-        }
-        
-        // Création d'une URL pré-signée pour le fichier de sortie
-        const command = new GetObjectCommand({
-            Bucket: S3_BUCKET,
-            Key: `certificates/${studentName}.pdf`
-        });
-
-        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-        
-        console.log('✅ Certificat généré et URL signée créée.');
-
-        res.json({
-            status: 'OK',
-            message: 'Certificat généré avec succès!',
-            certificateUrl: signedUrl
-        });
-
-    } catch (error) {
-        console.error('❌ Erreur de génération:', error.message);
-        res.status(500).json({
-            status: 'ERROR',
-            message: 'Erreur lors de la génération du certificat',
-            details: error.message
-        });
-    }
-});
-
-
 // Démarrer le serveur
 app.listen(port, () => {
     console.log('');
     console.log('🚀 Serveur RunScript démarré !');
     console.log('================================');
-    console.log(`📄 Interface: http://localhost:${port}`);
-    console.log(`🧪 Test API: http://localhost:${port}/test`);
-    console.log('');
-    console.log('Configuration:');
-    console.log('- API Key: ' + (RUNSCRIPT_KEY ? RUNSCRIPT_KEY.substring(0, 5) + '...' : '...'));
-    console.log('- S3 Templates Bucket: ' + S3_TEMPLATES_BUCKET);
-    console.log('- S3 Certificates Bucket: ' + S3_BUCKET);
-    console.log('- S3 Region: ' + S3_REGION);
+    console.log(`Serveur en écoute sur le port ${port}`);
+    console.log('================================');
 });
