@@ -161,7 +161,7 @@ app.get('/check-status/:jobId', async (req, res) => {
         );
         const jobStatus = jobResponse.data.status;
 
-        if (jobStatus === 'done') {
+        if (jobStatus === 'complete') { // Corrigé de 'done' à 'complete'
             const s3Key = jobResponse.data.outputs[0].href.split('?')[0].split('.com/')[1];
             console.log(`✅ Job ${jobId} terminé. Génération de l'URL de téléchargement pour le fichier ${s3Key}`);
             const downloadUrl = await generateS3DownloadUrl(s3Key);
