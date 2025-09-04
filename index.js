@@ -42,6 +42,15 @@ async function generateS3UploadUrl(key, contentType) {
     return getSignedUrl(s3Client, command, { expiresIn: 60 });
 }
 
+// Fonction pour générer une URL pré-signée pour le téléchargement (GetObjectCommand) depuis S3
+async function generateS3DownloadUrl(key) {
+    const command = new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+    });
+    return getSignedUrl(s3Client, command, { expiresIn: 3600 }); // URL valide pour 1 heure
+}
+
 // Route pour la page d'accueil (sert index.html)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -51,8 +60,7 @@ app.get('/', (req, res) => {
 app.post('/generate', async (req, res) => {
     try {
         const name = req.body.name;
-        
-        // **Vérification ajoutée**
+
         if (!name) {
             console.error('❌ Erreur: Le nom n\'est pas fourni dans la requête.');
             return res.status(400).json({
@@ -114,6 +122,9 @@ app.post('/generate', async (req, res) => {
         const jobId = response.data._id;
         console.log('📋 Job ID:', jobId);
 
+        // Stocker la clé S3 pour le suivi de l'état
+        jobStatus[jobId] = { s3Key: s3Key, status: 'submitted' };
+
         res.json({
             status: 'OK',
             message: 'Demande de génération soumise. Veuillez vérifier l\'état du job.',
@@ -128,6 +139,50 @@ app.post('/generate', async (req, res) => {
         });
     }
 });
+
+// Route pour vérifier l'état d'un job RunScript et générer l'URL de téléchargement
+app.get('/check-status/:jobId', async (req, res) => {
+    const { jobId } = req.params;
+
+    try {
+        console.log(`🔍 Vérification du statut pour le Job ID: ${jobId}`);
+
+        const auth = {
+            username: RUNSCRIPT_KEY,
+            password: RUNSCRIPT_SECRET
+        };
+
+        const jobResponse = await axios.get(
+            `https://runscript.typefi.com/api/v2/job/${jobId}`,
+            { auth: auth }
+        );
+        const jobStatus = jobResponse.data.status;
+
+        if (jobStatus === 'done') {
+            const s3Key = jobResponse.data.outputs[0].href.split('?')[0].split('.com/')[1];
+            console(`✅ Job ${jobId} terminé. Génération de l'URL de téléchargement pour le fichier ${s3Key}`);
+            const downloadUrl = await generateS3DownloadUrl(s3Key);
+            res.json({
+                status: 'done',
+                downloadUrl: downloadUrl
+            });
+        } else if (jobStatus === 'failed') {
+            console.error(`❌ Job ${jobId} a échoué.`);
+            res.json({ status: 'failed', message: 'La génération du certificat a échoué.' });
+        } else {
+            console.log(`⏳ Job ${jobId} en cours...`);
+            res.json({ status: 'in-progress' });
+        }
+
+    } catch (error) {
+        console.error(`❌ Erreur lors de la vérification du statut pour le Job ID ${jobId}:`, error.message);
+        res.status(500).json({
+            error: 'Erreur de vérification du statut',
+            details: error.message
+        });
+    }
+});
+
 
 // Route de test
 app.get('/test', async (req, res) => {
