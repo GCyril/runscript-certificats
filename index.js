@@ -18,6 +18,9 @@ const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Objet pour stocker l'état des jobs.
+const jobStatus = {};
+
 // Utiliser express.static pour servir les fichiers statiques
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
@@ -160,7 +163,7 @@ app.get('/check-status/:jobId', async (req, res) => {
 
         if (jobStatus === 'done') {
             const s3Key = jobResponse.data.outputs[0].href.split('?')[0].split('.com/')[1];
-            console(`✅ Job ${jobId} terminé. Génération de l'URL de téléchargement pour le fichier ${s3Key}`);
+            console.log(`✅ Job ${jobId} terminé. Génération de l'URL de téléchargement pour le fichier ${s3Key}`);
             const downloadUrl = await generateS3DownloadUrl(s3Key);
             res.json({
                 status: 'done',
