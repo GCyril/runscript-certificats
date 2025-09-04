@@ -45,11 +45,14 @@
 
                     if (data.status === 'done') {
                         clearInterval(interval);
-                        statusMessage.innerHTML = '✅ Génération terminée ! Le téléchargement va démarrer...';
-                        statusMessage.classList.add('bg-green-100', 'text-green-800');
-
-                        // Déclencher le téléchargement du fichier
-                        window.location.href = data.downloadUrl;
+                        // Afficher un bouton pour le téléchargement
+                        statusMessage.innerHTML = `
+                            <p class="text-green-800 text-center">✅ Génération terminée !</p>
+                            <a href="${data.downloadUrl}" class="mt-4 inline-block w-full text-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out">
+                                Télécharger le certificat
+                            </a>
+                        `;
+                        statusMessage.classList.add('bg-green-100');
                     } else if (data.status === 'failed') {
                         clearInterval(interval);
                         statusMessage.innerHTML = `❌ Échec de la génération : ${data.message}`;
@@ -78,6 +81,7 @@
 
             statusMessage.classList.add('hidden');
             statusMessage.classList.remove('bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800');
+            statusMessage.innerHTML = ''; // Réinitialiser le contenu du message
 
             if (!name) {
                 statusMessage.innerHTML = '⚠️ Veuillez entrer votre nom.';
