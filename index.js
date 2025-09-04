@@ -50,8 +50,18 @@ app.get('/', (req, res) => {
 // Route pour la génération du certificat
 app.post('/generate', async (req, res) => {
     try {
-        console.log('📝 Nouvelle demande de certificat pour:', req.body.name);
         const name = req.body.name;
+        
+        // **Vérification ajoutée**
+        if (!name) {
+            console.error('❌ Erreur: Le nom n\'est pas fourni dans la requête.');
+            return res.status(400).json({
+                error: 'Nom manquant',
+                details: 'Veuillez fournir un nom dans le corps de la requête.'
+            });
+        }
+
+        console.log('📝 Nouvelle demande de certificat pour:', name);
         const s3Key = `certificates/${Date.now()}_${name.replace(/ /g, '_')}.pdf`;
 
         // Lire le script JSX
@@ -101,7 +111,6 @@ app.post('/generate', async (req, res) => {
             { auth: auth }
         );
 
-        // Correction ici: l'ID du job est sous la propriété `_id`
         const jobId = response.data._id;
         console.log('📋 Job ID:', jobId);
 
