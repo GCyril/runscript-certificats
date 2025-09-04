@@ -2,7 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs-extra');
 const axios = require('axios');
-const path = require('path'); // Ajoutez le module 'path'
+const path = require('path');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
@@ -19,7 +19,6 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Utiliser express.static pour servir les fichiers statiques
-// C'est la ligne cruciale qui indique au serveur où trouver le dossier 'public'
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
 
@@ -45,8 +44,6 @@ async function generateS3UploadUrl(key, contentType) {
 
 // Route pour la page d'accueil (sert index.html)
 app.get('/', (req, res) => {
-    // Le serveur sert automatiquement index.html depuis le dossier 'public'
-    // car c'est le fichier par défaut de express.static
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -58,7 +55,7 @@ app.post('/generate', async (req, res) => {
         const s3Key = `certificates/${Date.now()}_${name.replace(/ /g, '_')}.pdf`;
 
         // Lire le script JSX
-        const script = await fs.readFile('./script.jsx', 'utf8');
+        const script = await fs.readFile(path.join(__dirname, 'script.jsx'), 'utf8');
 
         // Générer une URL pré-signée S3 pour l'upload du PDF
         const presignedS3UploadUrl = await generateS3UploadUrl(s3Key, 'application/pdf');
@@ -104,6 +101,7 @@ app.post('/generate', async (req, res) => {
             { auth: auth }
         );
 
+        // Correction ici: l'ID du job est sous la propriété `_id`
         const jobId = response.data._id;
         console.log('📋 Job ID:', jobId);
 
@@ -114,7 +112,7 @@ app.post('/generate', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erreur:', error.message);
+        console.error('❌ Erreur lors de la génération du certificat:', error.message);
         res.status(500).json({
             error: 'Erreur lors de la génération',
             details: error.message
