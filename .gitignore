@@ -3,3 +3,4 @@
 
 # Dossiers générés par Node.js
 node_modules/
+.DS_Store
