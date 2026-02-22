@@ -2,5 +2,8 @@
 .env
 
 # Dossiers générés par Node.js
-node_modules/.DS_Store
+node_modules/
+
+# macOS
+.DS_Store
 **/.DS_Store
