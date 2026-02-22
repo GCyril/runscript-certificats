@@ -37,13 +37,14 @@ const s3Client = new S3Client({
 // =============================
 
 // Fonction pour générer une URL pré-signée pour l'upload (PutObjectCommand) sur S3
-async function generateS3UploadUrl(key, contentType) {
+async function generateS3UploadUrl(key) {
     const command = new PutObjectCommand({
         Bucket: S3_BUCKET,
         Key: key,
-        ContentType: contentType,
+        // ContentType retiré : le SDK v3 l'inclut dans la signature, ce qui fait échouer
+        // l'upload RunScript si celui-ci n'envoie pas exactement le même Content-Type
     });
-    return getSignedUrl(s3Client, command, { expiresIn: 60 });
+    return getSignedUrl(s3Client, command, { expiresIn: 600 }); // 10 minutes
 }
 
 // Fonction pour générer une URL pré-signée pour le téléchargement (GetObjectCommand) depuis S3
@@ -91,7 +92,7 @@ app.post('/generate', async (req, res) => {
         const script = await fs.readFile(path.join(__dirname, 'certificat.jsx'), 'utf8');
 
         // Générer une URL pré-signée S3 pour l'upload du PDF
-        const presignedS3UploadUrl = await generateS3UploadUrl(s3Key, 'application/pdf');
+        const presignedS3UploadUrl = await generateS3UploadUrl(s3Key);
         console.log(`🔗 URL d'upload S3 pré-signée créée pour le compartiment "${S3_BUCKET}".`);
 
         // Générer les URLs presignées GET pour tous les fichiers du template (compartiment S3_ASSETS_BUCKET)
