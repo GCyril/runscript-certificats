@@ -9,7 +9,8 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 // ====== GESTION DES VARIABLES D'ENVIRONNEMENT ======
 const RUNSCRIPT_KEY = process.env.RUNSCRIPT_KEY;
 const RUNSCRIPT_SECRET = process.env.RUNSCRIPT_SECRET;
-const S3_BUCKET = process.env.S3_BUCKET;
+const S3_BUCKET        = process.env.S3_BUCKET;         // compartiment de sortie (PDFs générés)
+const S3_ASSETS_BUCKET = process.env.S3_ASSETS_BUCKET;  // compartiment des assets (indd, fontes, image)
 const S3_REGION = process.env.S3_REGION;
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
@@ -54,6 +55,16 @@ async function generateS3DownloadUrl(key) {
     return getSignedUrl(s3Client, command, { expiresIn: 3600 }); // URL valide pour 1 heure
 }
 
+// Fonction pour générer une URL pré-signée en lecture (GET) pour les assets du template
+// Utilisée par RunScript pour télécharger le .indd, les polices et l'image de fond
+async function generateS3AssetUrl(key) {
+    const command = new GetObjectCommand({
+        Bucket: S3_ASSETS_BUCKET,
+        Key: key,
+    });
+    return getSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 heure — laisse du temps à RunScript
+}
+
 // Route pour la page d'accueil (sert index.html)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -62,49 +73,55 @@ app.get('/', (req, res) => {
 // Route pour la génération du certificat
 app.post('/generate', async (req, res) => {
     try {
-        const name = req.body.name;
+        const nom  = req.body.nom;
+        const date = req.body.date;
 
-        if (!name) {
-            console.error('❌ Erreur: Le nom n\'est pas fourni dans la requête.');
+        if (!nom || !date) {
+            console.error('❌ Erreur: Nom ou date manquant dans la requête.');
             return res.status(400).json({
-                error: 'Nom manquant',
-                details: 'Veuillez fournir un nom dans le corps de la requête.'
+                error: 'Champs manquants',
+                details: 'Veuillez fournir un nom et une date dans le corps de la requête.'
             });
         }
 
-        console.log('📝 Nouvelle demande de certificat pour:', name);
-        const s3Key = `certificates/${Date.now()}_${name.replace(/ /g, '_')}.pdf`;
+        console.log('📝 Nouvelle demande de certificat pour:', nom, '|', date);
+        const s3Key = `certificates/${Date.now()}_${nom.replace(/ /g, '_')}.pdf`;
 
         // Lire le script JSX
-        const script = await fs.readFile(path.join(__dirname, 'script.jsx'), 'utf8');
+        const script = await fs.readFile(path.join(__dirname, 'certificat.jsx'), 'utf8');
 
         // Générer une URL pré-signée S3 pour l'upload du PDF
         const presignedS3UploadUrl = await generateS3UploadUrl(s3Key, 'application/pdf');
         console.log(`🔗 URL d'upload S3 pré-signée créée pour le compartiment "${S3_BUCKET}".`);
 
+        // Générer les URLs presignées GET pour tous les fichiers du template (compartiment S3_ASSETS_BUCKET)
+        console.log(`📦 Génération des URLs d'accès aux assets depuis "${S3_ASSETS_BUCKET}"...`);
+        const [inddUrl, tifUrl, font1Url, font2Url] = await Promise.all([
+            generateS3AssetUrl('Commendation-mountains.indd'),
+            generateS3AssetUrl('fond-mountains.tif'),
+            generateS3AssetUrl('opensans.ttf'),
+            generateS3AssetUrl('opensans bold.ttf'),
+        ]);
+
         const data = {
             inputs: [
-                {
-                    href: 'https://dl.dropboxusercontent.com/scl/fi/da7pccjrm2y3ysw92eidr/eotm.indd?rlkey=gwrzrpx9aokqd5b0q9qaaq9p3',
-                    path: 'eotm.indd'
-                },
-                {
-                    href: 'https://dl.dropboxusercontent.com/scl/fi/avajg3zr08hzi6n29q7na/eotm.pdf?rlkey=ni38skm462tajczfetbteosc3',
-                    path: 'eotm.pdf'
-                },
-                {
-                    href: 'https://dl.dropboxusercontent.com/scl/fi/zh2rz5f4wikkrw1ju2p3h/Brush-Script-MT-Italic.ttf?rlkey=i841j1j8vn2io1ag84sofkkbg',
-                    path: 'Document Fonts/Brush Script MT Italic.ttf'
-                }
+                // Fichier InDesign principal
+                { href: inddUrl,  path: 'Commendation-mountains.indd' },
+                // Image de fond (liée dans le .indd — doit être dans le même dossier)
+                { href: tifUrl,   path: 'fond-mountains.tif' },
+                // Polices (InDesign Server cherche dans Document Fonts/ relatif au .indd)
+                { href: font1Url, path: 'Document Fonts/opensans.ttf' },
+                { href: font2Url, path: 'Document Fonts/opensans bold.ttf' },
             ],
             outputs: [
                 {
-                    path: 'certificate.pdf',
+                    path: 'certificat.pdf',
                     href: presignedS3UploadUrl
                 }
             ],
             args: [
-                { name: 'Name', value: name }
+                { name: 'Nom',  value: nom  },
+                { name: 'Date', value: date }
             ],
             script: script,
         };

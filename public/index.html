@@ -1,130 +1,469 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Générateur de Certificats</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de certificats</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0c0d11;
+      --card:     #12141a;
+      --border:   rgba(201, 160, 103, 0.25);
+      --gold:     #c9a067;
+      --gold-dim: rgba(201, 160, 103, 0.55);
+      --cream:    #f0e8d8;
+      --muted:    rgba(240, 232, 216, 0.45);
+      --error:    #c0504a;
+      --success:  #5a9e6f;
+    }
+
+    /* ── Fond avec grain ──────────────────────────────────────────── */
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--bg);
+      font-family: 'DM Sans', sans-serif;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 20% 110%, rgba(201,160,103,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% -10%, rgba(201,160,103,0.05) 0%, transparent 55%);
+      pointer-events: none;
+    }
+
+    /* Grain overlay */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    /* ── Carte principale ─────────────────────────────────────────── */
+    .card {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 3rem 3rem 2.75rem;
+      animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(22px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Coins dorés décoratifs */
+    .card::before, .card::after,
+    .corner-bl, .corner-br {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      border-color: var(--gold);
+      border-style: solid;
+    }
+    .card::before  { top: 10px; left: 10px;  border-width: 1px 0 0 1px; }
+    .card::after   { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
+    .corner-bl     { bottom: 10px; left: 10px;  border-width: 0 0 1px 1px; }
+    .corner-br     { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
+
+    /* ── En-tête ──────────────────────────────────────────────────── */
+    .header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      animation: rise 0.7s 0.05s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .eyebrow {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.75rem;
+    }
+
+    .title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2rem;
+      font-weight: 300;
+      color: var(--cream);
+      line-height: 1.15;
+      letter-spacing: 0.01em;
+    }
+
+    .title em {
+      font-style: italic;
+      font-weight: 400;
+      color: var(--gold);
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.5rem 0;
+    }
+    .divider-line { flex: 1; height: 1px; background: var(--border); }
+    .divider-dot  { width: 4px; height: 4px; background: var(--gold-dim); transform: rotate(45deg); flex-shrink: 0; }
+
+    /* ── Champs ───────────────────────────────────────────────────── */
+    .fields {
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+      animation: rise 0.7s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .field { position: relative; }
+
+    .field label {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-bottom: 0.6rem;
+      transition: color 0.2s;
+    }
+    .field:focus-within label { color: var(--gold); }
+
+    .field input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      padding: 0.5rem 0 0.6rem;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 300;
+      color: var(--cream);
+      outline: none;
+      transition: border-color 0.25s;
+      caret-color: var(--gold);
+    }
+    .field input::placeholder { color: rgba(240,232,216,0.18); }
+    .field input:focus         { border-bottom-color: var(--gold); }
+
+    .field-bar {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 1px; width: 0;
+      background: var(--gold);
+      transition: width 0.35s cubic-bezier(0.4,0,0.2,1);
+    }
+    .field input:focus ~ .field-bar { width: 100%; }
+
+    /* ── Bouton ───────────────────────────────────────────────────── */
+    .btn-wrap {
+      margin-top: 2.5rem;
+      animation: rise 0.7s 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .btn {
+      width: 100%;
+      position: relative;
+      padding: 0.85rem 1.5rem;
+      background: transparent;
+      border: 1px solid var(--gold-dim);
+      color: var(--gold);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      cursor: pointer;
+      overflow: hidden;
+      transition: color 0.3s, border-color 0.3s;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--gold);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+      z-index: 0;
+    }
+    .btn:hover:not(:disabled)::before { transform: scaleX(1); }
+    .btn:hover:not(:disabled)  { color: var(--bg); border-color: var(--gold); }
+    .btn:active:not(:disabled) { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn span { position: relative; z-index: 1; }
+
+    /* ── Zone de statut ───────────────────────────────────────────── */
+    .status-box {
+      margin-top: 1.75rem;
+      padding: 1rem 1.25rem;
+      border-left: 2px solid transparent;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: var(--muted);
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: opacity 0.4s, max-height 0.4s, border-color 0.4s, background 0.4s;
+    }
+    .status-box.visible {
+      opacity: 1;
+      max-height: 200px;
+    }
+    .status-box.waiting  { border-color: var(--gold-dim);  background: rgba(201,160,103,0.05); }
+    .status-box.success  { border-color: var(--success);   background: rgba(90,158,111,0.07); }
+    .status-box.error    { border-color: var(--error);      background: rgba(192,80,74,0.07); }
+
+    .status-box .status-label {
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+    .status-box.waiting .status-label { color: var(--gold); }
+    .status-box.success .status-label { color: var(--success); }
+    .status-box.error   .status-label { color: var(--error); }
+
+    .status-box .status-text { color: var(--cream); opacity: 0.75; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border: 1.5px solid var(--gold-dim);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Bouton téléchargement ────────────────────────────────────── */
+    .download-btn {
+      display: block;
+      margin-top: 0.75rem;
+      padding: 0.6rem 1rem;
+      background: rgba(90,158,111,0.15);
+      border: 1px solid rgba(90,158,111,0.4);
+      color: #7dbe96;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .download-btn:hover {
+      background: rgba(90,158,111,0.25);
+      border-color: rgba(90,158,111,0.7);
+      color: #a0d4b5;
+    }
+
+    /* ── Pied de page ─────────────────────────────────────────────── */
+    .footer {
+      text-align: center;
+      margin-top: 2.25rem;
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(240,232,216,0.18);
+      animation: rise 0.7s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+<body>
 
-    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Générateur de Certificats</h1>
+  <div class="card">
+    <div class="corner-bl"></div>
+    <div class="corner-br"></div>
 
-        <form id="certificateForm" class="space-y-4">
-            <div>
-                <label for="name" class="block text-sm font-medium text-gray-700">Nom et Prénom</label>
-                <input type="text" id="name" name="name" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Entrez votre nom" required>
-            </div>
-
-            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out">
-                Générer le Certificat
-            </button>
-        </form>
-
-        <div id="statusMessage" class="mt-6 p-4 rounded-md hidden"></div>
+    <div class="header">
+      <p class="eyebrow">Typefi · RunScript</p>
+      <h1 class="title">Générateur de<br><em>certificats</em></h1>
+      <div class="divider">
+        <div class="divider-line"></div>
+        <div class="divider-dot"></div>
+        <div class="divider-line"></div>
+      </div>
     </div>
 
-    <script>
-        // Fonction pour démarrer le polling pour le statut du job
-        async function pollStatus(jobId) {
-            const statusMessage = document.getElementById('statusMessage');
-            const interval = setInterval(async () => {
-                try {
-                    const response = await fetch(`/check-status/${jobId}`);
-                    const data = await response.json();
+    <form id="certForm" novalidate>
+      <div class="fields">
 
-                    if (data.status === 'done') {
-                        clearInterval(interval);
-                        // Afficher un bouton pour le téléchargement
-                        statusMessage.innerHTML = `
-                            <p class="text-green-800 text-center">✅ Génération terminée !</p>
-                            <a href="${data.downloadUrl}" class="mt-4 inline-block w-full text-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out">
-                                Télécharger le certificat
-                            </a>
-                        `;
-                        statusMessage.classList.add('bg-green-100');
-                    } else if (data.status === 'failed') {
-                        clearInterval(interval);
-                        statusMessage.innerHTML = `❌ Échec de la génération : ${data.message}`;
-                        statusMessage.classList.add('bg-red-100', 'text-red-800');
-                        document.getElementById('certificateForm').querySelector('button').disabled = false;
-                    } else {
-                        statusMessage.innerHTML = '⏳ Génération en cours...';
-                        statusMessage.classList.add('bg-yellow-100', 'text-yellow-800');
-                    }
-                } catch (error) {
-                    clearInterval(interval);
-                    console.error('Erreur de polling:', error);
-                    statusMessage.innerHTML = '❌ Erreur lors de la vérification du statut.';
-                    statusMessage.classList.add('bg-red-100', 'text-red-800');
-                    document.getElementById('certificateForm').querySelector('button').disabled = false;
-                }
-            }, 3000); // Poll toutes les 3 secondes
+        <div class="field">
+          <label for="nom">Nom du bénéficiaire</label>
+          <input
+            type="text"
+            id="nom"
+            name="nom"
+            placeholder="Marie-Claire Dupont"
+            autocomplete="name"
+            required>
+          <div class="field-bar"></div>
+        </div>
+
+        <div class="field">
+          <label for="date">Date du certificat</label>
+          <input
+            type="text"
+            id="date"
+            name="date"
+            placeholder="17 janvier 2026"
+            required>
+          <div class="field-bar"></div>
+        </div>
+
+      </div>
+
+      <div class="btn-wrap">
+        <button type="submit" class="btn" id="submitBtn">
+          <span>Générer le certificat</span>
+        </button>
+      </div>
+    </form>
+
+    <!-- Zone de statut -->
+    <div class="status-box" id="statusBox" role="status" aria-live="polite">
+      <div class="status-label" id="statusLabel"></div>
+      <div class="status-text"  id="statusText"></div>
+    </div>
+
+    <p class="footer">InDesign Server · AWS S3</p>
+  </div>
+
+  <script>
+    const form      = document.getElementById('certForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusBox = document.getElementById('statusBox');
+    const statusLabel = document.getElementById('statusLabel');
+    const statusText  = document.getElementById('statusText');
+
+    let pollTimer = null;
+
+    // ── Affichage du statut ──────────────────────────────────────────
+    function showStatus(type, label, text, extra = '') {
+      statusBox.className = 'status-box visible ' + type;
+      statusLabel.textContent = label;
+      statusText.innerHTML = text + extra;
+    }
+
+    function resetStatus() {
+      statusBox.className = 'status-box';
+      statusLabel.textContent = '';
+      statusText.innerHTML = '';
+    }
+
+    // ── Polling ──────────────────────────────────────────────────────
+    function startPolling(jobId) {
+      showStatus('waiting', 'En cours',
+        '<span class="spinner"></span>InDesign génère votre certificat…');
+
+      pollTimer = setInterval(async () => {
+        try {
+          const res  = await fetch(`/check-status/${jobId}`);
+          const data = await res.json();
+
+          if (data.status === 'done') {
+            clearInterval(pollTimer);
+            showStatus('success', 'Terminé',
+              'Votre certificat est prêt.',
+              `<br><a class="download-btn" href="${data.downloadUrl}" download>
+                ↓ &nbsp; Télécharger le PDF
+              </a>`
+            );
+            submitBtn.disabled = false;
+
+          } else if (data.status === 'failed') {
+            clearInterval(pollTimer);
+            showStatus('error', 'Échec',
+              data.message || 'La génération a échoué. Vérifiez les logs serveur.');
+            submitBtn.disabled = false;
+          }
+          // sinon : toujours in-progress → on continue de poller
+
+        } catch (err) {
+          clearInterval(pollTimer);
+          showStatus('error', 'Erreur réseau',
+            'Impossible de vérifier l\'état du job.');
+          submitBtn.disabled = false;
+        }
+      }, 3000);
+    }
+
+    // ── Soumission du formulaire ─────────────────────────────────────
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (pollTimer) clearInterval(pollTimer);
+
+      const nom  = document.getElementById('nom').value.trim();
+      const date = document.getElementById('date').value.trim();
+
+      if (!nom || !date) {
+        showStatus('error', 'Champs requis',
+          'Veuillez renseigner le nom et la date.');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      showStatus('waiting', 'Soumission',
+        '<span class="spinner"></span>Envoi du job à RunScript…');
+
+      try {
+        const res  = await fetch('/generate', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ nom, date })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.jobId) {
+          startPolling(data.jobId);
+        } else {
+          showStatus('error', 'Erreur',
+            data.error || 'Une erreur est survenue.',
+            data.details ? `<br><small style="opacity:.6">${data.details}</small>` : '');
+          submitBtn.disabled = false;
         }
 
-        document.getElementById('certificateForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+      } catch (err) {
+        showStatus('error', 'Erreur réseau',
+          'Impossible de joindre le serveur.');
+        submitBtn.disabled = false;
+      }
+    });
 
-            const form = e.target;
-            const name = form.name.value;
-            const statusMessage = document.getElementById('statusMessage');
-
-            statusMessage.classList.add('hidden');
-            statusMessage.classList.remove('bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800');
-            statusMessage.innerHTML = ''; // Réinitialiser le contenu du message
-
-            if (!name) {
-                statusMessage.innerHTML = '⚠️ Veuillez entrer votre nom.';
-                statusMessage.classList.remove('hidden');
-                statusMessage.classList.add('bg-yellow-100', 'text-yellow-800');
-                return;
-            }
-
-            // Afficher le message de chargement
-            statusMessage.innerHTML = '⏳ Soumission de la demande...';
-            statusMessage.classList.remove('hidden');
-            statusMessage.classList.add('bg-blue-100', 'text-blue-800');
-            form.querySelector('button').disabled = true;
-
-            try {
-                // Envoyer la requête POST
-                const response = await fetch('/generate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ name: name })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    statusMessage.innerHTML = `✅ Soumission réussie ! Job ID: ${data.jobId}.`;
-                    statusMessage.classList.add('bg-green-100', 'text-green-800');
-                    pollStatus(data.jobId); // Démarrer le polling
-                } else {
-                    statusMessage.innerHTML = `❌ Erreur: ${data.error} - ${data.details || 'Aucun détail'}`;
-                    statusMessage.classList.add('bg-red-100', 'text-red-800');
-                    form.querySelector('button').disabled = false;
-                }
-            } catch (error) {
-                console.error('Erreur de la requête:', error);
-                statusMessage.innerHTML = '❌ Une erreur est survenue lors de la connexion au serveur.';
-                statusMessage.classList.add('bg-red-100', 'text-red-800');
-                form.querySelector('button').disabled = false;
-            }
-        });
-    </script>
+    // Réinitialiser le statut quand l'utilisateur modifie un champ
+    ['nom','date'].forEach(id =>
+      document.getElementById(id).addEventListener('input', () => {
+        if (statusBox.classList.contains('error')) resetStatus();
+      })
+    );
+  </script>
 
 </body>
 </html>
