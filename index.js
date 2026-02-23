@@ -261,8 +261,12 @@ app.get('/test-runscript-output', async (req, res) => {
         const inddUrl   = await generateS3AssetUrl('Commendation-mountains.indd');
         const auth      = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
 
-        // Script ASCII pur, sans caracteres non-ASCII (compatibilite ExtendScript)
+        // Script ASCII pur. IMPORTANT : #target indesign ne peut pas etre en
+        // ligne 1 (cause "Syntax error" dans RunScript) — doit etre precede
+        // d'au moins un commentaire, comme dans certificat.jsx.
         const testScript = [
+            '// test-runscript-output : verifie upload output RunScript vers S3',
+            '// ASCII pur, #target apres commentaire',
             '#target indesign',
             'app.consoleout("Test output RunScript S3 start");',
             'var inddFile = File("Commendation-mountains.indd");',
@@ -283,18 +287,38 @@ app.get('/test-runscript-output', async (req, res) => {
             script:  testScript,
         };
 
-        // Mode SYNCHRONE — attend la fin du job et retourne la réponse complète
-        console.log('🧪 Test RunScript output (synchrone)...');
-        const response = await axios.post(
-            'https://runscript.typefi.com/api/v2/job',  // pas de ?async=true
+        // Mode ASYNC (comme les vrais jobs InDesign) + polling jusqu'à completion
+        // Le mode synchrone utilise un moteur JS pur (pas InDesign), donc inutilisable
+        // pour tester les APIs ExtendScript (app.consoleout, File, etc.)
+        console.log('🧪 Test RunScript output (async + polling)...');
+        const submitResp = await axios.post(
+            'https://runscript.typefi.com/api/v2/job?async=true',
             jobData,
-            { auth, timeout: 120000 }
+            { auth, timeout: 30000 }
         );
+        const testJobId = submitResp.data._id;
+        console.log(`🧪 Job soumis : ${testJobId}`);
 
-        console.log(`🧪 Test terminé — result: ${response.data.result}, log: ${response.data.log}`);
+        // Attendre jusqu'à 90 secondes que le job se termine
+        let fullResult = null;
+        for (let i = 0; i < 30; i++) {
+            await new Promise(r => setTimeout(r, 3000));
+            const poll = await axios.get(
+                `https://runscript.typefi.com/api/v2/job/${testJobId}`,
+                { auth }
+            );
+            const st = poll.data.status;
+            console.log(`🧪 Poll ${i + 1}/30 : status=${st}`);
+            if (st === 'complete' || st === 'failed') {
+                fullResult = poll.data;
+                break;
+            }
+        }
+
+        console.log(`🧪 Test terminé — result: ${fullResult?.result}, log: ${fullResult?.log}`);
         res.json({
             status:     'OK',
-            fullResult: response.data,
+            fullResult: fullResult || { error: 'timeout apres 90s' },
             s3Key:      testKey,
             s3Bucket:   S3_BUCKET,
             note:       'Si result=success : verifiez si ' + testKey + ' est apparu dans S3',
