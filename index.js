@@ -62,6 +62,27 @@ async function generateS3AssetUrl(key) {
 // ── Middleware statique (avant tout parsing du body) ──────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Logger toutes les requêtes non-triviales (diagnostic RunScript) ────────
+// Permet de détecter si RunScript appelle notre serveur pour les outputs
+// (même avec une méthode inattendue : GET, POST, PATCH…)
+app.use((req, res, next) => {
+    const skip = req.method === 'GET' && ['/', '/index.html'].includes(req.path);
+    if (!skip) {
+        console.log(`📡 ${req.method} ${req.path} | IP: ${req.ip} | CT: ${req.headers['content-type'] || '-'} | CL: ${req.headers['content-length'] || '-'}`);
+    }
+    next();
+});
+
+// ── Cache-bust input : contenu unique pour forcer un vrai job InDesign ─────
+// Servi à RunScript comme input supplémentaire dont le contenu change
+// à chaque requête. Force un cache miss (clé cache = hash des inputs).
+// Double usage : prouve aussi que RunScript peut accéder à des URLs non-S3.
+app.get('/cache-bust-input', (req, res) => {
+    console.log(`📎 cache-bust-input téléchargé par : ${req.ip}`);
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(`cache-bust:${Date.now()}`);
+});
+
 // ── Route /receive-output — AVANT bodyParser.json ─────────────────────────
 // RunScript appelle cette URL en PUT avec le PDF en corps brut.
 // On reçoit le PDF et on l'uploade directement vers S3 via le SDK AWS.
@@ -149,13 +170,26 @@ app.post('/generate', async (req, res) => {
             generateS3AssetUrl('opensans bold.ttf'),
         ]);
 
+        // Le cache RunScript est basé sur les fichiers d'entrée (pas le script ni les args).
+        // On ajoute un input cache-bust servi par notre serveur dont le contenu est unique
+        // à chaque requête → garantit un vrai job InDesign Server à chaque génération.
+        // Bonus : prouve que RunScript peut accéder aux URLs de notre serveur (non-S3).
+        const cacheBustUrl = APP_URL
+            ? `${APP_URL}/cache-bust-input`
+            : null;
+
+        const inputs = [
+            { href: inddUrl,  path: 'Commendation-mountains.indd' },
+            { href: tifUrl,   path: 'fond-mountains.tif' },
+            { href: font1Url, path: 'Document Fonts/opensans.ttf' },
+            { href: font2Url, path: 'Document Fonts/opensans bold.ttf' },
+        ];
+        if (cacheBustUrl) {
+            inputs.push({ href: cacheBustUrl, path: '_cache-bust.txt' });
+        }
+
         const data = {
-            inputs: [
-                { href: inddUrl,  path: 'Commendation-mountains.indd' },
-                { href: tifUrl,   path: 'fond-mountains.tif' },
-                { href: font1Url, path: 'Document Fonts/opensans.ttf' },
-                { href: font2Url, path: 'Document Fonts/opensans bold.ttf' },
-            ],
+            inputs,
             outputs: [{ path: 'certificat.pdf', href: outputHref }],
             args:    [{ name: 'Nom', value: nom }, { name: 'Date', value: date }],
             script:  script,
@@ -300,8 +334,16 @@ app.get('/test-runscript-output', async (req, res) => {
             'app.consoleout("Test output RunScript OK");',
         ].join('\n');
 
+        // Cache-bust input : force un vrai job InDesign (pas de résultat caché)
+        const testInputs = [
+            { href: inddUrl, path: 'Commendation-mountains.indd' },
+        ];
+        if (APP_URL) {
+            testInputs.push({ href: `${APP_URL}/cache-bust-input`, path: '_cache-bust.txt' });
+        }
+
         const jobData = {
-            inputs:  [{ href: inddUrl, path: 'Commendation-mountains.indd' }],
+            inputs:  testInputs,
             outputs: [{ path: 'output.txt', href: outputHref }],
             script:  testScript,
         };
@@ -388,11 +430,19 @@ app.get('/test-runscript-diag', async (req, res) => {
             'throw new Error("FORCE_LOGIDS");',
         ].join('\n');
 
-        // IMPORTANT : la clé de cache RunScript = inputs + args (PAS le script).
-        // Sans args uniques, même script différent → résultat caché → script jamais exécuté.
-        // L'arg cacheBust force un vrai job InDesign Server à chaque appel.
+        // Double cache-bust :
+        // 1. arg cacheBust (au cas où la clé inclut les args)
+        // 2. input _cache-bust.txt avec contenu unique (la clé est basée sur les inputs)
+        // Le GET sur /cache-bust-input dans les logs prouvera que RunScript
+        // peut accéder à des URLs non-S3 → utile pour déboguer la route output.
+        const diagInputs = [
+            { href: inddUrl, path: 'Commendation-mountains.indd' },
+        ];
+        if (APP_URL) {
+            diagInputs.push({ href: `${APP_URL}/cache-bust-input`, path: '_cache-bust.txt' });
+        }
         const jobData = {
-            inputs:  [{ href: inddUrl, path: 'Commendation-mountains.indd' }],
+            inputs:  diagInputs,
             outputs: [],
             args:    [{ name: 'cacheBust', value: cacheBust.toString() }],
             script:  diagScript,
