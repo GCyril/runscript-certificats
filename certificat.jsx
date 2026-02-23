@@ -132,11 +132,14 @@ try {
     }
 
     if (pdfPreset) {
-        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false, pdfPreset);
+        // InDesign Server : exportFile(format, to, using:PDFExportPreset) — 3 args
+        // Le preset est en position 3, PAS de showingOptions avant lui
+        // (contrairement à InDesign Desktop qui accepte un booléen en 3e position)
+        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, pdfPreset);
     } else {
-        // Dernier recours sans preset (peut échouer sur InDesign Server)
-        app.consoleout("Aucun preset PDF trouvé — tentative sans preset");
-        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false);
+        // Aucun preset trouvé — erreur explicite plutôt qu'un crash obscur
+        throw new Error("Aucun preset PDF disponible sur ce serveur InDesign. "
+            + "Presets testes : " + presetCandidates.join(", "));
     }
 
     app.consoleout("PDF exporté : " + pdfFile.fsName);
