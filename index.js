@@ -228,7 +228,44 @@ app.get('/job-debug/:jobId', async (req, res) => {
 });
 
 
-// Route de test
+// Route de test S3 : génère une URL pré-signée PUT et tente d'uploader un fichier texte
+// Usage : GET /test-upload
+// Permet de vérifier que les permissions IAM PutObject fonctionnent correctement
+app.get('/test-upload', async (req, res) => {
+    try {
+        console.log('🧪 Test d\'upload S3...');
+        const testKey = `test/${Date.now()}_diagnostic.txt`;
+        const uploadUrl = await generateS3UploadUrl(testKey);
+        console.log(`🔗 URL pré-signée PUT générée : ${uploadUrl.substring(0, 80)}...`);
+
+        // Tenter d'uploader un petit fichier texte via l'URL pré-signée (comme le ferait RunScript)
+        const testContent = Buffer.from(`Test upload depuis Node.js — ${new Date().toISOString()}`);
+        const uploadResponse = await axios.put(uploadUrl, testContent);
+
+        console.log(`✅ Upload réussi ! HTTP ${uploadResponse.status}`);
+        res.json({
+            status: 'OK',
+            message: `Upload de test réussi (HTTP ${uploadResponse.status})`,
+            key: testKey,
+            bucket: S3_BUCKET,
+            uploadUrlPreview: uploadUrl.substring(0, 120) + '...'
+        });
+    } catch (error) {
+        const detail = error.response?.data || error.message;
+        console.error('❌ Échec de l\'upload S3 :', detail);
+        res.status(500).json({
+            status: 'ERROR',
+            message: 'L\'upload vers S3 a échoué',
+            httpStatus: error.response?.status,
+            error: error.message,
+            s3Response: error.response?.data
+        });
+    }
+});
+
+
+// Route de test RunScript (synchrone) — retourne la réponse COMPLÈTE pour voir tous les champs
+// (notamment le champ "log" avec la sortie de app.consoleout)
 app.get('/test', async (req, res) => {
     try {
         console.log('🧪 Test de connexion RunScript...');
@@ -246,18 +283,20 @@ app.get('/test', async (req, res) => {
         const testData = {
             inputs: [],
             outputs: [],
-            script: "app.consoleout('Test');",
+            script: "app.consoleout('=== TEST app.consoleout ==='); app.consoleout('Heure : ' + new Date().toISOString());",
         };
+        // Appel SYNCHRONE (sans ?async=true) pour obtenir le résultat complet directement
         const response = await axios.post(
             'https://runscript.typefi.com/api/v2/job',
             testData,
             { auth: auth }
         );
-        console.log('✅ Test réussi:', response.data);
+        console.log('✅ Test RunScript réussi. Réponse complète:', JSON.stringify(response.data));
+        // Retourner la réponse brute complète — permet de voir le champ "log" (app.consoleout)
         res.json({
             status: 'OK',
-            message: 'Connexion RunScript réussie!',
-            jobId: response.data._id
+            message: 'Test RunScript réussi — voir rawResponse pour le champ log',
+            rawResponse: response.data
         });
     } catch (error) {
         console.error('❌ Erreur:', error.message);

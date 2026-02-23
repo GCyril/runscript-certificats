@@ -69,6 +69,13 @@ try {
     app.consoleout("PDF exporté : " + pdfFile.fsName);
     app.consoleout("PDF existe  : " + pdfFile.exists);
 
+    // ── Vérification CRITIQUE : le PDF doit exister ───────────────────────
+    // Si l'export a échoué silencieusement, on lève une erreur explicite
+    // pour que RunScript marque le job comme "failed" (au lieu de "success")
+    if (!pdfFile.exists) {
+        throw new Error("EXPORT ÉCHOUÉ : certificat.pdf n'existe pas après doc.exportFile(). Vérifiez les polices, l'image liée et les presets PDF.");
+    }
+
     // ── Fermeture sans sauvegarde ─────────────────────────────────────────
     doc.close(SaveOptions.NO);
     app.consoleout("=== Script terminé avec succès ===");
