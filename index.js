@@ -210,6 +210,24 @@ app.get('/check-status/:jobId', async (req, res) => {
 });
 
 
+// Route de diagnostic : retourne la réponse complète de l'API RunScript pour un job
+// Usage : GET /job-debug/ID_DU_JOB
+app.get('/job-debug/:jobId', async (req, res) => {
+    const { jobId } = req.params;
+    try {
+        const auth = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
+        const response = await axios.get(
+            `https://runscript.typefi.com/api/v2/job/${jobId}`,
+            { auth }
+        );
+        // Retourner la réponse brute complète — inclut status, log, outputs, erreurs
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({ error: error.message, details: error.response?.data });
+    }
+});
+
+
 // Route de test
 app.get('/test', async (req, res) => {
     try {
