@@ -163,8 +163,10 @@ app.post('/generate', async (req, res) => {
 
         // Générer les URLs presignées GET pour les assets
         console.log(`📦 Génération des URLs d'accès aux assets depuis "${S3_ASSETS_BUCKET}"...`);
-        const [inddUrl, tifUrl, font1Url, font2Url] = await Promise.all([
-            generateS3AssetUrl('Commendation-mountains.indd'),
+        // IDML (InDesign Markup Language) : format XML indépendant de la version.
+        // Remplace le .indd v21 (InDesign 2025) incompatible avec RunScript v20 (2024).
+        const [idmlUrl, tifUrl, font1Url, font2Url] = await Promise.all([
+            generateS3AssetUrl('Commendation-mountains.idml'),
             generateS3AssetUrl('fond-mountains.tif'),
             generateS3AssetUrl('opensans.ttf'),
             generateS3AssetUrl('opensans bold.ttf'),
@@ -179,7 +181,7 @@ app.post('/generate', async (req, res) => {
             : null;
 
         const inputs = [
-            { href: inddUrl,  path: 'Commendation-mountains.indd' },
+            { href: idmlUrl,  path: 'Commendation-mountains.idml' },
             { href: tifUrl,   path: 'fond-mountains.tif' },
             { href: font1Url, path: 'Document Fonts/opensans.ttf' },
             { href: font2Url, path: 'Document Fonts/opensans bold.ttf' },
@@ -408,25 +410,23 @@ app.get('/test-runscript-output', async (req, res) => {
 // Polling 120s car les vrais jobs InDesign prennent souvent >90s.
 app.get('/test-runscript-diag', async (req, res) => {
     try {
-        const inddUrl    = await generateS3AssetUrl('Commendation-mountains.indd');
+        const idmlUrl    = await generateS3AssetUrl('Commendation-mountains.idml');
         const auth       = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
         const cacheBust  = Date.now();
 
         const diagScript = [
             '// diag : ECHEC INTENTIONNEL pour forcer logIDS',
             '// cache-bust : ' + cacheBust,
-            '#target indesign',
+            '// pas de #target indesign (conflit avec RunScript — recommandation Typefi)',
             'app.consoleout("=== DIAG PATHS ===");',
             'app.consoleout("app.version  : " + app.version);',
-            'var inddFile = File("Commendation-mountains.indd");',
-            'app.consoleout("INDD fsName  : " + inddFile.fsName);',
-            'app.consoleout("INDD existe  : " + inddFile.exists);',
-            'var workDir = inddFile.parent;',
+            'var idmlFile = File("Commendation-mountains.idml");',
+            'app.consoleout("IDML fsName  : " + idmlFile.fsName);',
+            'app.consoleout("IDML existe  : " + idmlFile.exists);',
+            'var workDir = idmlFile.parent;',
             'app.consoleout("workDir      : " + workDir.fsName);',
             'var absOut = new File(workDir.fsName + "/output.txt");',
             'app.consoleout("absOut fsName : " + absOut.fsName);',
-            'var relOut = new File("output.txt");',
-            'app.consoleout("relOut fsName : " + relOut.fsName);',
             'throw new Error("FORCE_LOGIDS");',
         ].join('\n');
 
@@ -436,7 +436,7 @@ app.get('/test-runscript-diag', async (req, res) => {
         // Le GET sur /cache-bust-input dans les logs prouvera que RunScript
         // peut accéder à des URLs non-S3 → utile pour déboguer la route output.
         const diagInputs = [
-            { href: inddUrl, path: 'Commendation-mountains.indd' },
+            { href: idmlUrl, path: 'Commendation-mountains.idml' },
         ];
         if (APP_URL) {
             diagInputs.push({ href: `${APP_URL}/cache-bust-input`, path: '_cache-bust.txt' });

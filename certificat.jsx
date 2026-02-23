@@ -1,6 +1,7 @@
 // certificat.jsx — Script InDesign pour générer le certificat (2 champs)
 // Champs : <<Nom>> et <<Date>>
-#target indesign
+// NOTE : pas de directive #target ici — le script tourne déjà dans InDesign Server
+// via l'API RunScript. #target indesign provoque un conflit (recommandation Typefi).
 
 // ── Récupération des arguments ──────────────────────────────────────────────
 var recipientName = "";
@@ -16,6 +17,7 @@ if (app.scriptArgs.isDefined("Date")) {
 app.consoleout("=== Démarrage certificat.jsx ===");
 app.consoleout("Nom  : " + recipientName);
 app.consoleout("Date : " + certDate);
+app.consoleout("InDesign version : " + app.version);
 
 // ── Mode serveur : supprimer TOUS les dialogues InDesign ──────────────────
 // Sans ça, une alerte "lien manquant" ou "police manquante" bloque le serveur
@@ -23,22 +25,34 @@ app.consoleout("Date : " + certDate);
 app.scriptPreferences.userInteractionLevel = UserInteractionLevels.NEVER_INTERACT;
 
 try {
-    // ── Ouverture du document ──────────────────────────────────────────────
-    var inddFile = File("Commendation-mountains.indd");
-    app.consoleout("Chemin du fichier : " + inddFile.fsName);
-    app.consoleout("Fichier existe    : " + inddFile.exists);
+    // ── Ouverture du document IDML ─────────────────────────────────────────
+    // IDML (InDesign Markup Language) est un format XML indépendant de la version.
+    // Contrairement au .indd, un fichier IDML créé dans InDesign 2025 peut être
+    // ouvert par n'importe quelle version antérieure d'InDesign Server.
+    // RunScript utilise InDesign 2024 (v20.x) — le .indd v21 était incompatible.
+    var idmlFile = File("Commendation-mountains.idml");
+    app.consoleout("Chemin IDML    : " + idmlFile.fsName);
+    app.consoleout("Fichier existe : " + idmlFile.exists);
 
-    var doc = app.open(inddFile);
-    app.consoleout("Document ouvert   : " + doc.name);
+    if (!idmlFile.exists) {
+        throw new Error("IDML introuvable : " + idmlFile.fsName);
+    }
 
-    // ── Relink de tous les assets depuis le dossier de travail RunScript ──
-    // RunScript place le .indd et tous les assets dans le même dossier.
-    // InDesign cherche d'abord au chemin d'origine (Mac local) → introuvable.
-    // On force le relink vers le dossier du .indd sur le serveur.
-    var docFolder = File(doc.fullName).parent;
+    var doc = app.open(idmlFile);
+    app.consoleout("Document ouvert : " + doc.name);
+
+    // ── Dossier de travail ────────────────────────────────────────────────
+    // Avec IDML, le document ouvert est "Untitled" (pas encore enregistré),
+    // donc doc.fullName n'est pas fiable. On utilise idmlFile.parent qui pointe
+    // directement vers le dossier où RunScript a téléchargé tous les inputs.
+    var docFolder = idmlFile.parent;
     app.consoleout("Dossier de travail : " + docFolder.fsName);
     app.consoleout("Nombre de liens    : " + doc.links.length);
 
+    // ── Relink de tous les assets depuis le dossier de travail RunScript ──
+    // RunScript place l'IDML et tous les assets dans le même dossier.
+    // InDesign cherche d'abord au chemin d'origine (Mac local) → introuvable.
+    // On force le relink vers le dossier de l'IDML sur le serveur.
     for (var i = 0; i < doc.links.length; i++) {
         var lien = doc.links[i];
         var linkedFile = new File(docFolder.fsName + "/" + lien.name);
@@ -75,48 +89,37 @@ try {
     app.consoleout("<<Date>> : " + foundDates.length + " remplacement(s)");
 
     // ── Export PDF ────────────────────────────────────────────────────────
-    // IMPORTANT : chemin ABSOLU dérivé du dossier du .indd (= dossier de travail
-    // RunScript). new File("certificat.pdf") relatif se résoudrait par rapport
-    // au répertoire courant d'InDesign — pas forcément le bon.
+    // Chemin absolu dans le dossier de travail (même répertoire que l'IDML).
     var pdfFile = new File(docFolder.fsName + "/certificat.pdf");
     app.consoleout("PDF cible : " + pdfFile.fsName);
 
-    // Désactiver l'ouverture automatique du PDF après export (bloquerait le serveur)
+    // Désactiver l'ouverture automatique du PDF après export
     app.pdfExportPreferences.viewDocumentAfterExport = false;
 
-    // Chercher un preset disponible, sinon utiliser les préférences par défaut
-    var presetNames = ["[High Quality Print]", "[Press Quality]",
-                       "[PDF/X-4:2008]", "[PDF/X-1a:2001]", "[Smallest File Size]"];
-    var pdfPreset = null;
-    for (var j = 0; j < presetNames.length; j++) {
-        var candidate = app.pdfExportPresets.item(presetNames[j]);
-        if (candidate.isValid) {
-            pdfPreset = candidate;
-            app.consoleout("Preset PDF utilisé : " + presetNames[j]);
-            break;
-        }
-    }
-
-    if (pdfPreset) {
-        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false, pdfPreset);
-    } else {
-        app.consoleout("Aucun preset trouvé — export avec préférences courantes.");
-        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false);
-    }
+    // Export sans preset dédié — utilisation des préférences courantes.
+    // Recommandation Typefi : créer un preset nommé "CertificatPDF" dans InDesign,
+    // l'embarquer dans l'IDML, et décommenter les lignes ci-dessous.
+    // var pdfPreset = app.pdfExportPresets.item("CertificatPDF");
+    // if (pdfPreset.isValid) {
+    //     doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false, pdfPreset);
+    // } else {
+    //     doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false);
+    // }
+    doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false);
 
     app.consoleout("PDF exporté : " + pdfFile.fsName);
     app.consoleout("PDF existe  : " + pdfFile.exists);
 
     // ── Vérification CRITIQUE : le PDF doit exister ───────────────────────
     if (!pdfFile.exists) {
-        throw new Error("EXPORT ÉCHOUÉ : " + pdfFile.fsName
-            + " n'existe pas après doc.exportFile()."
-            + " Vérifiez les polices, l'image liée et les presets PDF.");
+        throw new Error("EXPORT ECHOUE : " + pdfFile.fsName
+            + " n'existe pas apres doc.exportFile()."
+            + " Verifiez les polices, l'image liee et la version InDesign.");
     }
 
     // ── Fermeture sans sauvegarde ─────────────────────────────────────────
     doc.close(SaveOptions.NO);
-    app.consoleout("=== Script terminé avec succès ===");
+    app.consoleout("=== Script termine avec succes ===");
 
 } catch (error) {
     app.consoleout("ERREUR : " + error.toString());
