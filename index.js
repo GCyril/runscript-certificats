@@ -247,28 +247,39 @@ app.get('/job-debug/:jobId', async (req, res) => {
 });
 
 
-// ── Test décisif : RunScript peut-il uploader vers une URL externe ? ───────
-// Soumet un job RunScript SYNCHRONE avec :
-//   - le .indd comme input (RunScript semble requérir au moins un input)
-//   - un simple fichier texte comme output
-//   - la presigned PUT URL S3 comme destination
-// Retourne la réponse COMPLÈTE (inclut le champ "log" avec les erreurs)
-// Vérifier ensuite dans S3 si le fichier test/ est apparu.
+// ── Test upload RunScript : presigned URL S3 (confirmé cassé) OU receive-output ─
+// Mode automatique :
+//   - APP_URL défini  → RunScript PUT vers /receive-output/:token (notre serveur)
+//   - APP_URL absent  → RunScript PUT vers presigned URL S3 (confirmé non fonctionnel)
+// Après le job : HeadObjectCommand pour vérifier si le fichier est dans S3.
 app.get('/test-runscript-output', async (req, res) => {
     try {
-        const testKey  = `test/${Date.now()}_runscript_output.txt`;
-        const uploadUrl = await generateS3UploadUrl(testKey);
-        const inddUrl   = await generateS3AssetUrl('Commendation-mountains.indd');
-        const auth      = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
+        const testKey = `test/${Date.now()}_runscript_output.txt`;
+        const inddUrl = await generateS3AssetUrl('Commendation-mountains.indd');
+        const auth    = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
+
+        // Choisir l'URL de destination pour l'output
+        let outputHref;
+        let mode;
+        if (APP_URL) {
+            const token = crypto.randomUUID();
+            pendingUploads[token] = testKey;
+            outputHref = `${APP_URL}/receive-output/${token}`;
+            mode = 'receive-output (APP_URL defini)';
+        } else {
+            outputHref = await generateS3UploadUrl(testKey);
+            mode = 'presigned-PUT-S3 (APP_URL absent — confirme non fonctionnel)';
+        }
+        console.log(`🧪 Test RunScript output — mode: ${mode}`);
+        console.log(`🧪 Output href : ${outputHref.substring(0, 80)}...`);
 
         // Script ASCII pur. IMPORTANT : #target indesign ne peut pas etre en
-        // ligne 1 (cause "Syntax error" dans RunScript) — doit etre precede
-        // d'au moins un commentaire, comme dans certificat.jsx.
+        // ligne 1 (cause "Syntax error") — doit etre precede d'un commentaire.
         const testScript = [
-            '// test-runscript-output : verifie upload output RunScript vers S3',
+            '// test-runscript-output : verifie upload output RunScript',
             '// ASCII pur, #target apres commentaire',
             '#target indesign',
-            'app.consoleout("Test output RunScript S3 start");',
+            'app.consoleout("Test output RunScript start");',
             'var inddFile = File("Commendation-mountains.indd");',
             'app.consoleout("INDD existe : " + inddFile.exists);',
             'var f = new File("output.txt");',
@@ -278,19 +289,16 @@ app.get('/test-runscript-output', async (req, res) => {
             'app.consoleout("Fichier : " + f.fsName);',
             'app.consoleout("Existe  : " + f.exists);',
             'if (!f.exists) { throw new Error("Fichier output.txt non cree"); }',
-            'app.consoleout("Test output RunScript S3 OK");',
+            'app.consoleout("Test output RunScript OK");',
         ].join('\n');
 
         const jobData = {
             inputs:  [{ href: inddUrl, path: 'Commendation-mountains.indd' }],
-            outputs: [{ path: 'output.txt', href: uploadUrl }],
+            outputs: [{ path: 'output.txt', href: outputHref }],
             script:  testScript,
         };
 
-        // Mode ASYNC (comme les vrais jobs InDesign) + polling jusqu'à completion
-        // Le mode synchrone utilise un moteur JS pur (pas InDesign), donc inutilisable
-        // pour tester les APIs ExtendScript (app.consoleout, File, etc.)
-        console.log('🧪 Test RunScript output (async + polling)...');
+        // Mode ASYNC + polling 90s (synchrone = moteur JS pur, pas InDesign Server)
         const submitResp = await axios.post(
             'https://runscript.typefi.com/api/v2/job?async=true',
             jobData,
@@ -299,7 +307,6 @@ app.get('/test-runscript-output', async (req, res) => {
         const testJobId = submitResp.data._id;
         console.log(`🧪 Job soumis : ${testJobId}`);
 
-        // Attendre jusqu'à 90 secondes que le job se termine
         let fullResult = null;
         for (let i = 0; i < 30; i++) {
             await new Promise(r => setTimeout(r, 3000));
@@ -315,13 +322,28 @@ app.get('/test-runscript-output', async (req, res) => {
             }
         }
 
-        console.log(`🧪 Test terminé — result: ${fullResult?.result}, log: ${fullResult?.log}`);
+        // Vérifier la présence dans S3 (attend 3s pour laisser le temps à l'upload)
+        await new Promise(r => setTimeout(r, 3000));
+        let inS3 = false;
+        try {
+            await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: testKey }));
+            inS3 = true;
+            console.log(`🧪 ✅ Fichier présent dans S3 : ${testKey}`);
+        } catch (_) {
+            console.log(`🧪 ❌ Fichier ABSENT de S3 : ${testKey}`);
+        }
+
+        console.log(`🧪 Terminé — result: ${fullResult?.result} | S3: ${inS3} | mode: ${mode}`);
         res.json({
-            status:     'OK',
+            status:    'OK',
+            mode,
+            inS3,
             fullResult: fullResult || { error: 'timeout apres 90s' },
-            s3Key:      testKey,
-            s3Bucket:   S3_BUCKET,
-            note:       'Si result=success : verifiez si ' + testKey + ' est apparu dans S3',
+            s3Key:     testKey,
+            s3Bucket:  S3_BUCKET,
+            verdict:   inS3
+                ? '✅ Upload RunScript fonctionne dans ce mode !'
+                : '❌ RunScript n\'a pas uploade le fichier dans S3',
         });
     } catch (error) {
         res.status(500).json({ error: error.message, details: error.response?.data });
