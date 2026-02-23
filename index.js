@@ -254,8 +254,14 @@ app.get('/check-status/:jobId', async (req, res) => {
             }
 
         } else if (rsStatus === 'failed') {
-            console.error(`❌ Job ${jobId} a échoué.`);
-            return res.json({ status: 'failed', message: 'La génération du certificat a échoué.' });
+            const logIDS = jobResponse.data.logIDS || jobResponse.data.log || null;
+            console.error(`❌ Job ${jobId} a échoué. logIDS: ${logIDS ? logIDS.substring(0, 300) : 'absent'}`);
+            return res.json({
+                status:  'failed',
+                message: 'La génération du certificat a échoué.',
+                logIDS,
+                jobId,
+            });
         } else {
             return res.json({ status: 'in-progress' });
         }
@@ -291,7 +297,7 @@ app.get('/job-debug/:jobId', async (req, res) => {
 app.get('/test-runscript-output', async (req, res) => {
     try {
         const testKey = `test/${Date.now()}_runscript_output.txt`;
-        const inddUrl = await generateS3AssetUrl('Commendation-mountains.indd');
+        const inddUrl = await generateS3AssetUrl('Commendation-mountains.idml');
         const auth    = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
 
         // Choisir l'URL de destination pour l'output
@@ -317,13 +323,12 @@ app.get('/test-runscript-output', async (req, res) => {
         // On utilise inddFile.parent.fsName (= repertoire de travail RunScript)
         // exactement comme certificat.jsx utilise docFolder.fsName.
         const testScript = [
-            '// test-runscript-output : chemin absolu via inddFile.parent',
-            '// ASCII pur, #target apres commentaire',
-            '#target indesign',
+            '// test-runscript-output : chemin absolu via idmlFile.parent',
+            '// ASCII pur, pas de #target indesign (conflit RunScript — recommandation Typefi)',
             'app.consoleout("Test output RunScript start");',
-            'var inddFile = File("Commendation-mountains.indd");',
-            'app.consoleout("INDD fsName : " + inddFile.fsName);',
-            'app.consoleout("INDD existe : " + inddFile.exists);',
+            'var inddFile = File("Commendation-mountains.idml");',
+            'app.consoleout("IDML fsName : " + inddFile.fsName);',
+            'app.consoleout("IDML existe : " + inddFile.exists);',
             'var workDir = inddFile.parent;',
             'app.consoleout("workDir : " + workDir.fsName);',
             'var f = new File(workDir.fsName + "/output.txt");',
@@ -338,7 +343,7 @@ app.get('/test-runscript-output', async (req, res) => {
 
         // Cache-bust input : force un vrai job InDesign (pas de résultat caché)
         const testInputs = [
-            { href: inddUrl, path: 'Commendation-mountains.indd' },
+            { href: inddUrl, path: 'Commendation-mountains.idml' },
         ];
         if (APP_URL) {
             testInputs.push({ href: `${APP_URL}/cache-bust-input`, path: '_cache-bust.txt' });
