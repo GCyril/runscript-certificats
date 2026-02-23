@@ -273,21 +273,29 @@ app.get('/test-runscript-output', async (req, res) => {
         console.log(`🧪 Test RunScript output — mode: ${mode}`);
         console.log(`🧪 Output href : ${outputHref.substring(0, 80)}...`);
 
-        // Script ASCII pur. IMPORTANT : #target indesign ne peut pas etre en
+        // Script ASCII pur. IMPORTANT : #target indesign ne doit pas etre en
         // ligne 1 (cause "Syntax error") — doit etre precede d'un commentaire.
+        //
+        // CHEMIN ABSOLU : new File("output.txt") resoud dans un repertoire
+        // different de celui ou RunScript cherche les outputs.
+        // On utilise inddFile.parent.fsName (= repertoire de travail RunScript)
+        // exactement comme certificat.jsx utilise docFolder.fsName.
         const testScript = [
-            '// test-runscript-output : verifie upload output RunScript',
+            '// test-runscript-output : chemin absolu via inddFile.parent',
             '// ASCII pur, #target apres commentaire',
             '#target indesign',
             'app.consoleout("Test output RunScript start");',
             'var inddFile = File("Commendation-mountains.indd");',
+            'app.consoleout("INDD fsName : " + inddFile.fsName);',
             'app.consoleout("INDD existe : " + inddFile.exists);',
-            'var f = new File("output.txt");',
+            'var workDir = inddFile.parent;',
+            'app.consoleout("workDir : " + workDir.fsName);',
+            'var f = new File(workDir.fsName + "/output.txt");',
             'f.open("w");',
             'f.write("RunScript output test at " + new Date().getTime());',
             'f.close();',
-            'app.consoleout("Fichier : " + f.fsName);',
-            'app.consoleout("Existe  : " + f.exists);',
+            'app.consoleout("output.txt fsName : " + f.fsName);',
+            'app.consoleout("output.txt existe : " + f.exists);',
             'if (!f.exists) { throw new Error("Fichier output.txt non cree"); }',
             'app.consoleout("Test output RunScript OK");',
         ].join('\n');
