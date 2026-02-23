@@ -1,30 +1,32 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const crypto = require('crypto');
 const fs = require('fs-extra');
 const axios = require('axios');
 const path = require('path');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 // ====== GESTION DES VARIABLES D'ENVIRONNEMENT ======
-const RUNSCRIPT_KEY = process.env.RUNSCRIPT_KEY;
-const RUNSCRIPT_SECRET = process.env.RUNSCRIPT_SECRET;
-const S3_BUCKET        = process.env.S3_BUCKET;         // compartiment de sortie (PDFs générés)
-const S3_ASSETS_BUCKET = process.env.S3_ASSETS_BUCKET;  // compartiment des assets (indd, fontes, image)
-const S3_REGION = process.env.S3_REGION;
+const RUNSCRIPT_KEY     = process.env.RUNSCRIPT_KEY;
+const RUNSCRIPT_SECRET  = process.env.RUNSCRIPT_SECRET;
+const S3_BUCKET         = process.env.S3_BUCKET;         // compartiment de sortie (PDFs générés)
+const S3_ASSETS_BUCKET  = process.env.S3_ASSETS_BUCKET;  // compartiment des assets (indd, fontes, image)
+const S3_REGION         = process.env.S3_REGION;
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+// URL publique de ce serveur Render (ex. https://mon-app.onrender.com)
+// Utilisée pour la route /receive-output — RunScript PUT le PDF ici
+const APP_URL           = process.env.APP_URL;
 // =================================================
 
-const app = express();
+const app  = express();
 const port = process.env.PORT || 3000;
 
-// Objet pour stocker l'état des jobs.
-const jobStatus = {};
-
-// Utiliser express.static pour servir les fichiers statiques
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(bodyParser.json());
+// ── État en mémoire ────────────────────────────────────────────────────────
+const jobStatus     = {};  // jobId  → { s3Key, status }
+const pendingUploads = {}; // token  → s3Key  (pour la route /receive-output)
+// ──────────────────────────────────────────────────────────────────────────
 
 // --- CONFIGURATION AWS S3 ---
 const s3Client = new S3Client({
@@ -34,8 +36,6 @@ const s3Client = new S3Client({
         secretAccessKey: AWS_SECRET_ACCESS_KEY
     },
     // Désactive les checksums automatiques du SDK v3 dans les URLs presignées.
-    // Sans ça, le SDK ajoute x-amz-sdk-checksum-algorithm dans les headers signés,
-    // et RunScript ne les envoie pas → S3 rejette l'upload (SignatureDoesNotMatch).
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
 });
@@ -43,50 +43,78 @@ const s3Client = new S3Client({
 
 // Fonction pour générer une URL pré-signée pour l'upload (PutObjectCommand) sur S3
 async function generateS3UploadUrl(key) {
-    const command = new PutObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: key,
-        // ContentType retiré : le SDK v3 l'inclut dans la signature, ce qui fait échouer
-        // l'upload RunScript si celui-ci n'envoie pas exactement le même Content-Type
-    });
-    return getSignedUrl(s3Client, command, { expiresIn: 600 }); // 10 minutes
+    const command = new PutObjectCommand({ Bucket: S3_BUCKET, Key: key });
+    return getSignedUrl(s3Client, command, { expiresIn: 600 });
 }
 
 // Fonction pour générer une URL pré-signée pour le téléchargement (GetObjectCommand) depuis S3
 async function generateS3DownloadUrl(key) {
-    const command = new GetObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: key,
-    });
-    return getSignedUrl(s3Client, command, { expiresIn: 3600 }); // URL valide pour 1 heure
+    const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+    return getSignedUrl(s3Client, command, { expiresIn: 3600 });
 }
 
 // Fonction pour générer une URL pré-signée en lecture (GET) pour les assets du template
-// Utilisée par RunScript pour télécharger le .indd, les polices et l'image de fond
 async function generateS3AssetUrl(key) {
-    const command = new GetObjectCommand({
-        Bucket: S3_ASSETS_BUCKET,
-        Key: key,
-    });
-    return getSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 heure — laisse du temps à RunScript
+    const command = new GetObjectCommand({ Bucket: S3_ASSETS_BUCKET, Key: key });
+    return getSignedUrl(s3Client, command, { expiresIn: 3600 });
 }
 
-// Route pour la page d'accueil (sert index.html)
+// ── Middleware statique (avant tout parsing du body) ──────────────────────
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ── Route /receive-output — AVANT bodyParser.json ─────────────────────────
+// RunScript appelle cette URL en PUT avec le PDF en corps brut.
+// On reçoit le PDF et on l'uploade directement vers S3 via le SDK AWS.
+// Architecture alternative aux presigned PUT URLs (qui semblent ne pas
+// fonctionner avec le mécanisme d'upload interne de RunScript).
+app.put('/receive-output/:token', express.raw({ type: '*/*', limit: '50mb' }), async (req, res) => {
+    const { token } = req.params;
+    const s3Key = pendingUploads[token];
+
+    if (!s3Key) {
+        console.error(`❌ /receive-output : token inconnu ou expiré : ${token}`);
+        return res.status(404).send('Token unknown or expired');
+    }
+
+    try {
+        const content     = req.body;
+        const contentType = req.headers['content-type'] || 'application/pdf';
+        console.log(`📥 Réception output RunScript : ${content.length} octets | ${contentType} → ${s3Key}`);
+
+        await s3Client.send(new PutObjectCommand({
+            Bucket:      S3_BUCKET,
+            Key:         s3Key,
+            Body:        content,
+            ContentType: contentType,
+        }));
+
+        delete pendingUploads[token]; // Nettoyage
+        console.log(`✅ PDF uploadé vers S3 : ${s3Key}`);
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error(`❌ /receive-output : erreur upload S3 :`, error.message);
+        res.status(500).send('Upload error: ' + error.message);
+    }
+});
+
+// ── Parsing JSON pour toutes les autres routes ────────────────────────────
+app.use(bodyParser.json());
+
+// ── Page d'accueil ────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Route pour la génération du certificat
+// ── Route principale : génération du certificat ───────────────────────────
 app.post('/generate', async (req, res) => {
     try {
         const nom  = req.body.nom;
         const date = req.body.date;
 
         if (!nom || !date) {
-            console.error('❌ Erreur: Nom ou date manquant dans la requête.');
             return res.status(400).json({
-                error: 'Champs manquants',
-                details: 'Veuillez fournir un nom et une date dans le corps de la requête.'
+                error:   'Champs manquants',
+                details: 'Veuillez fournir un nom et une date.'
             });
         }
 
@@ -96,11 +124,23 @@ app.post('/generate', async (req, res) => {
         // Lire le script JSX
         const script = await fs.readFile(path.join(__dirname, 'certificat.jsx'), 'utf8');
 
-        // Générer une URL pré-signée S3 pour l'upload du PDF
-        const presignedS3UploadUrl = await generateS3UploadUrl(s3Key);
-        console.log(`🔗 URL d'upload S3 pré-signée créée pour le compartiment "${S3_BUCKET}".`);
+        // ── Choix de l'URL de sortie ──────────────────────────────────────
+        // Si APP_URL est défini, RunScript PUT le PDF sur notre serveur
+        // (plus fiable que les presigned PUT URLs S3 qui semblent ignorer
+        // les uploads de RunScript).
+        // Sinon, fallback sur la presigned PUT URL S3 classique.
+        let outputHref;
+        if (APP_URL) {
+            const token = crypto.randomUUID();
+            pendingUploads[token] = s3Key;
+            outputHref = `${APP_URL}/receive-output/${token}`;
+            console.log(`🔗 Output via serveur Render : ${outputHref}`);
+        } else {
+            outputHref = await generateS3UploadUrl(s3Key);
+            console.log(`🔗 Output via presigned URL S3 (APP_URL non défini)`);
+        }
 
-        // Générer les URLs presignées GET pour tous les fichiers du template (compartiment S3_ASSETS_BUCKET)
+        // Générer les URLs presignées GET pour les assets
         console.log(`📦 Génération des URLs d'accès aux assets depuis "${S3_ASSETS_BUCKET}"...`);
         const [inddUrl, tifUrl, font1Url, font2Url] = await Promise.all([
             generateS3AssetUrl('Commendation-mountains.indd'),
@@ -111,116 +151,95 @@ app.post('/generate', async (req, res) => {
 
         const data = {
             inputs: [
-                // Fichier InDesign principal
                 { href: inddUrl,  path: 'Commendation-mountains.indd' },
-                // Image de fond (liée dans le .indd — doit être dans le même dossier)
                 { href: tifUrl,   path: 'fond-mountains.tif' },
-                // Polices (InDesign Server cherche dans Document Fonts/ relatif au .indd)
                 { href: font1Url, path: 'Document Fonts/opensans.ttf' },
                 { href: font2Url, path: 'Document Fonts/opensans bold.ttf' },
             ],
-            outputs: [
-                {
-                    path: 'certificat.pdf',
-                    href: presignedS3UploadUrl
-                }
-            ],
-            args: [
-                { name: 'Nom',  value: nom  },
-                { name: 'Date', value: date }
-            ],
-            script: script,
+            outputs: [{ path: 'certificat.pdf', href: outputHref }],
+            args:    [{ name: 'Nom', value: nom }, { name: 'Date', value: date }],
+            script:  script,
         };
 
         console.log('🚀 Envoi du job à RunScript...');
-
-        const auth = {
-            username: RUNSCRIPT_KEY,
-            password: RUNSCRIPT_SECRET
-        };
-
+        const auth     = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
         const response = await axios.post(
             'https://runscript.typefi.com/api/v2/job?async=true',
             data,
-            { auth: auth }
+            { auth }
         );
 
         const jobId = response.data._id;
         console.log('📋 Job ID:', jobId);
+        jobStatus[jobId] = { s3Key, status: 'submitted' };
 
-        // Stocker la clé S3 pour le suivi de l'état
-        jobStatus[jobId] = { s3Key: s3Key, status: 'submitted' };
-
-        res.json({
-            status: 'OK',
-            message: 'Demande de génération soumise. Veuillez vérifier l\'état du job.',
-            jobId: jobId
-        });
+        res.json({ status: 'OK', jobId });
 
     } catch (error) {
-        console.error('❌ Erreur lors de la génération du certificat:', error.message);
-        res.status(500).json({
-            error: 'Erreur lors de la génération',
-            details: error.message
-        });
+        console.error('❌ Erreur /generate :', error.message);
+        res.status(500).json({ error: 'Erreur lors de la génération', details: error.message });
     }
 });
 
-// Route pour vérifier l'état d'un job RunScript et générer l'URL de téléchargement
+// ── Route de suivi de statut ──────────────────────────────────────────────
 app.get('/check-status/:jobId', async (req, res) => {
     const { jobId } = req.params;
 
     try {
-        console.log(`🔍 Vérification du statut pour le Job ID: ${jobId}`);
-
-        const auth = {
-            username: RUNSCRIPT_KEY,
-            password: RUNSCRIPT_SECRET
-        };
-
+        console.log(`🔍 Statut du Job ID: ${jobId}`);
+        const auth        = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
         const jobResponse = await axios.get(
             `https://runscript.typefi.com/api/v2/job/${jobId}`,
-            { auth: auth }
+            { auth }
         );
-        const jobStatus = jobResponse.data.status;
+        const rsStatus = jobResponse.data.status;
 
-        if (jobStatus === 'complete') { // Corrigé de 'done' à 'complete'
-            const s3Key = jobResponse.data.outputs[0].href.split('?')[0].split('.com/')[1];
-            console.log(`✅ Job ${jobId} terminé. Génération de l'URL de téléchargement pour le fichier ${s3Key}`);
-            const downloadUrl = await generateS3DownloadUrl(s3Key);
-            res.json({
-                status: 'done',
-                downloadUrl: downloadUrl
-            });
-        } else if (jobStatus === 'failed') {
+        if (rsStatus === 'complete') {
+            // Chercher la clé S3 : d'abord dans notre état local, sinon extraire du href
+            const stored = jobStatus[jobId];
+            const s3Key  = stored?.s3Key
+                || jobResponse.data.outputs?.[0]?.href?.split('?')[0]?.split('.com/')?.[1];
+
+            if (!s3Key) {
+                return res.json({ status: 'failed', message: 'Clé S3 introuvable.' });
+            }
+
+            // Vérifier si le fichier est effectivement dans S3 (pour les deux architectures)
+            try {
+                await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: s3Key }));
+                // Fichier présent → générer l'URL de téléchargement
+                console.log(`✅ Job ${jobId} : PDF disponible dans S3 (${s3Key})`);
+                const downloadUrl = await generateS3DownloadUrl(s3Key);
+                return res.json({ status: 'done', downloadUrl });
+            } catch (headErr) {
+                // Fichier pas encore dans S3 — peut-être que RunScript uploade encore
+                console.log(`⏳ Job ${jobId} complete mais PDF pas encore dans S3...`);
+                return res.json({ status: 'in-progress' });
+            }
+
+        } else if (rsStatus === 'failed') {
             console.error(`❌ Job ${jobId} a échoué.`);
-            res.json({ status: 'failed', message: 'La génération du certificat a échoué.' });
+            return res.json({ status: 'failed', message: 'La génération du certificat a échoué.' });
         } else {
-            console.log(`⏳ Job ${jobId} en cours...`);
-            res.json({ status: 'in-progress' });
+            return res.json({ status: 'in-progress' });
         }
 
     } catch (error) {
-        console.error(`❌ Erreur lors de la vérification du statut pour le Job ID ${jobId}:`, error.message);
-        res.status(500).json({
-            error: 'Erreur de vérification du statut',
-            details: error.message
-        });
+        console.error(`❌ Erreur /check-status/${jobId} :`, error.message);
+        res.status(500).json({ error: 'Erreur de vérification du statut', details: error.message });
     }
 });
 
 
-// Route de diagnostic : retourne la réponse complète de l'API RunScript pour un job
-// Usage : GET /job-debug/ID_DU_JOB
+// ── Diagnostic : réponse complète de l'API RunScript ─────────────────────
 app.get('/job-debug/:jobId', async (req, res) => {
     const { jobId } = req.params;
     try {
-        const auth = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
+        const auth     = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
         const response = await axios.get(
             `https://runscript.typefi.com/api/v2/job/${jobId}`,
             { auth }
         );
-        // Retourner la réponse brute complète — inclut status, log, outputs, erreurs
         res.json(response.data);
     } catch (error) {
         res.status(500).json({ error: error.message, details: error.response?.data });
@@ -228,23 +247,26 @@ app.get('/job-debug/:jobId', async (req, res) => {
 });
 
 
-// Route de test décisif : RunScript peut-il uploader un output vers S3 ?
-// Soumet un job minimal (pas d'InDesign, pas d'inputs) qui crée un simple
-// fichier texte et tente de l'uploader via l'URL pré-signée dans outputs[].href.
-// → Si le fichier apparaît dans S3 : le mécanisme d'upload RunScript fonctionne
-// → Si non : le problème vient de RunScript, pas de notre script InDesign
+// ── Test décisif : RunScript peut-il uploader vers une URL externe ? ───────
+// Soumet un job RunScript SYNCHRONE avec :
+//   - le .indd comme input (RunScript semble requérir au moins un input)
+//   - un simple fichier texte comme output
+//   - la presigned PUT URL S3 comme destination
+// Retourne la réponse COMPLÈTE (inclut le champ "log" avec les erreurs)
+// Vérifier ensuite dans S3 si le fichier test/ est apparu.
 app.get('/test-runscript-output', async (req, res) => {
     try {
-        const testKey = `test/${Date.now()}_runscript_output.txt`;
+        const testKey  = `test/${Date.now()}_runscript_output.txt`;
         const uploadUrl = await generateS3UploadUrl(testKey);
-        const auth = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
+        const inddUrl   = await generateS3AssetUrl('Commendation-mountains.indd');
+        const auth      = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
 
-        // IMPORTANT : ASCII pur uniquement — ExtendScript peut echouer
-        // avec des caracteres non-ASCII dans les scripts envoyes en ligne.
-        // getTime() au lieu de toISOString() pour compatibilite ExtendScript.
+        // Script ASCII pur, sans caracteres non-ASCII (compatibilite ExtendScript)
         const testScript = [
             '#target indesign',
             'app.consoleout("Test output RunScript S3 start");',
+            'var inddFile = File("Commendation-mountains.indd");',
+            'app.consoleout("INDD existe : " + inddFile.exists);',
             'var f = new File("output.txt");',
             'f.open("w");',
             'f.write("RunScript output test at " + new Date().getTime());',
@@ -256,25 +278,26 @@ app.get('/test-runscript-output', async (req, res) => {
         ].join('\n');
 
         const jobData = {
-            inputs:  [],
+            inputs:  [{ href: inddUrl, path: 'Commendation-mountains.indd' }],
             outputs: [{ path: 'output.txt', href: uploadUrl }],
             script:  testScript,
         };
 
+        // Mode SYNCHRONE — attend la fin du job et retourne la réponse complète
+        console.log('🧪 Test RunScript output (synchrone)...');
         const response = await axios.post(
-            'https://runscript.typefi.com/api/v2/job?async=true',
+            'https://runscript.typefi.com/api/v2/job',  // pas de ?async=true
             jobData,
-            { auth }
+            { auth, timeout: 120000 }
         );
 
-        const jobId = response.data._id;
-        console.log(`🧪 Test RunScript output — Job ID: ${jobId}, clé S3: ${testKey}`);
+        console.log(`🧪 Test terminé — result: ${response.data.result}, log: ${response.data.log}`);
         res.json({
-            status:   'OK',
-            message:  'Job de test soumis. Attendez ~30s puis vérifiez S3 et /job-debug/' + jobId,
-            jobId:    jobId,
-            s3Key:    testKey,
-            s3Bucket: S3_BUCKET,
+            status:     'OK',
+            fullResult: response.data,
+            s3Key:      testKey,
+            s3Bucket:   S3_BUCKET,
+            note:       'Si result=success : verifiez si ' + testKey + ' est apparu dans S3',
         });
     } catch (error) {
         res.status(500).json({ error: error.message, details: error.response?.data });
@@ -282,91 +305,59 @@ app.get('/test-runscript-output', async (req, res) => {
 });
 
 
-// Route de test S3 : génère une URL pré-signée PUT et tente d'uploader un fichier texte
-// Usage : GET /test-upload
-// Permet de vérifier que les permissions IAM PutObject fonctionnent correctement
+// ── Test S3 upload direct depuis Node.js ──────────────────────────────────
 app.get('/test-upload', async (req, res) => {
     try {
-        console.log('🧪 Test d\'upload S3...');
-        const testKey = `test/${Date.now()}_diagnostic.txt`;
-        const uploadUrl = await generateS3UploadUrl(testKey);
-        console.log(`🔗 URL pré-signée PUT générée : ${uploadUrl.substring(0, 80)}...`);
-
-        // Tenter d'uploader un petit fichier texte via l'URL pré-signée (comme le ferait RunScript)
-        const testContent = Buffer.from(`Test upload depuis Node.js — ${new Date().toISOString()}`);
-        const uploadResponse = await axios.put(uploadUrl, testContent);
-
-        console.log(`✅ Upload réussi ! HTTP ${uploadResponse.status}`);
+        const testKey     = `test/${Date.now()}_diagnostic.txt`;
+        const uploadUrl   = await generateS3UploadUrl(testKey);
+        const testContent = Buffer.from(`Test upload Node.js — ${new Date().toISOString()}`);
+        const uploadResp  = await axios.put(uploadUrl, testContent);
         res.json({
-            status: 'OK',
-            message: `Upload de test réussi (HTTP ${uploadResponse.status})`,
-            key: testKey,
-            bucket: S3_BUCKET,
-            uploadUrlPreview: uploadUrl.substring(0, 120) + '...'
+            status:   'OK',
+            message:  `Upload réussi (HTTP ${uploadResp.status})`,
+            key:      testKey,
+            bucket:   S3_BUCKET,
         });
     } catch (error) {
-        const detail = error.response?.data || error.message;
-        console.error('❌ Échec de l\'upload S3 :', detail);
         res.status(500).json({
-            status: 'ERROR',
-            message: 'L\'upload vers S3 a échoué',
+            status:     'ERROR',
+            error:      error.message,
             httpStatus: error.response?.status,
-            error: error.message,
-            s3Response: error.response?.data
+            s3Response: error.response?.data,
         });
     }
 });
 
 
-// Route de test RunScript (synchrone) — retourne la réponse COMPLÈTE pour voir tous les champs
-// (notamment le champ "log" avec la sortie de app.consoleout)
+// ── Test RunScript synchrone (vérification de connexion + log) ────────────
 app.get('/test', async (req, res) => {
     try {
-        console.log('🧪 Test de connexion RunScript...');
         if (!RUNSCRIPT_KEY || !RUNSCRIPT_SECRET) {
-            console.error('❌ Erreur: Clés RunScript manquantes!');
-            return res.status(500).json({
-                status: 'ERROR',
-                message: 'Clés API RunScript manquantes. Veuillez vérifier la configuration sur Render.'
-            });
+            return res.status(500).json({ status: 'ERROR', message: 'Clés API RunScript manquantes.' });
         }
-        const auth = {
-            username: RUNSCRIPT_KEY,
-            password: RUNSCRIPT_SECRET
-        };
+        const auth     = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
         const testData = {
-            inputs: [],
+            inputs:  [],
             outputs: [],
-            script: "app.consoleout('=== TEST app.consoleout ==='); app.consoleout('Heure : ' + new Date().toISOString());",
+            script:  "app.consoleout('=== TEST app.consoleout ==='); app.consoleout('OK');",
         };
-        // Appel SYNCHRONE (sans ?async=true) pour obtenir le résultat complet directement
         const response = await axios.post(
             'https://runscript.typefi.com/api/v2/job',
             testData,
-            { auth: auth }
+            { auth }
         );
-        console.log('✅ Test RunScript réussi. Réponse complète:', JSON.stringify(response.data));
-        // Retourner la réponse brute complète — permet de voir le champ "log" (app.consoleout)
-        res.json({
-            status: 'OK',
-            message: 'Test RunScript réussi — voir rawResponse pour le champ log',
-            rawResponse: response.data
-        });
+        res.json({ status: 'OK', rawResponse: response.data });
     } catch (error) {
-        console.error('❌ Erreur:', error.message);
-        res.status(500).json({
-            status: 'ERROR',
-            message: 'Erreur de connexion',
-            details: error.message
-        });
+        res.status(500).json({ status: 'ERROR', details: error.message });
     }
 });
 
-// Démarrer le serveur
+// ── Démarrage du serveur ──────────────────────────────────────────────────
 app.listen(port, () => {
     console.log('');
     console.log('🚀 Serveur RunScript démarré !');
     console.log('================================');
-    console.log(`Serveur en écoute sur le port ${port}`);
+    console.log(`Port     : ${port}`);
+    console.log(`APP_URL  : ${APP_URL || '(non défini — presigned URL S3 utilisée)'}`);
     console.log('================================');
 });
