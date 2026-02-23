@@ -228,6 +228,58 @@ app.get('/job-debug/:jobId', async (req, res) => {
 });
 
 
+// Route de test décisif : RunScript peut-il uploader un output vers S3 ?
+// Soumet un job minimal (pas d'InDesign, pas d'inputs) qui crée un simple
+// fichier texte et tente de l'uploader via l'URL pré-signée dans outputs[].href.
+// → Si le fichier apparaît dans S3 : le mécanisme d'upload RunScript fonctionne
+// → Si non : le problème vient de RunScript, pas de notre script InDesign
+app.get('/test-runscript-output', async (req, res) => {
+    try {
+        const testKey = `test/${Date.now()}_runscript_output.txt`;
+        const uploadUrl = await generateS3UploadUrl(testKey);
+        const auth = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
+
+        const testScript = [
+            '#target indesign',
+            'app.consoleout("=== Test output RunScript → S3 ===");',
+            'var f = new File("output.txt");',
+            'f.open("w");',
+            'f.write("RunScript output test : " + new Date().toISOString());',
+            'f.close();',
+            'app.consoleout("Fichier : " + f.fsName);',
+            'app.consoleout("Existe  : " + f.exists);',
+            'app.consoleout("Taille  : " + f.length + " octets");',
+            'if (!f.exists) { throw new Error("Fichier output.txt non créé !"); }',
+            'app.consoleout("=== Fin test output ===");',
+        ].join('\n');
+
+        const jobData = {
+            inputs:  [],
+            outputs: [{ path: 'output.txt', href: uploadUrl }],
+            script:  testScript,
+        };
+
+        const response = await axios.post(
+            'https://runscript.typefi.com/api/v2/job?async=true',
+            jobData,
+            { auth }
+        );
+
+        const jobId = response.data._id;
+        console.log(`🧪 Test RunScript output — Job ID: ${jobId}, clé S3: ${testKey}`);
+        res.json({
+            status:   'OK',
+            message:  'Job de test soumis. Attendez ~30s puis vérifiez S3 et /job-debug/' + jobId,
+            jobId:    jobId,
+            s3Key:    testKey,
+            s3Bucket: S3_BUCKET,
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message, details: error.response?.data });
+    }
+});
+
+
 // Route de test S3 : génère une URL pré-signée PUT et tente d'uploader un fichier texte
 // Usage : GET /test-upload
 // Permet de vérifier que les permissions IAM PutObject fonctionnent correctement
