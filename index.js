@@ -239,18 +239,20 @@ app.get('/test-runscript-output', async (req, res) => {
         const uploadUrl = await generateS3UploadUrl(testKey);
         const auth = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
 
+        // IMPORTANT : ASCII pur uniquement — ExtendScript peut echouer
+        // avec des caracteres non-ASCII dans les scripts envoyes en ligne.
+        // getTime() au lieu de toISOString() pour compatibilite ExtendScript.
         const testScript = [
             '#target indesign',
-            'app.consoleout("=== Test output RunScript → S3 ===");',
+            'app.consoleout("Test output RunScript S3 start");',
             'var f = new File("output.txt");',
             'f.open("w");',
-            'f.write("RunScript output test : " + new Date().toISOString());',
+            'f.write("RunScript output test at " + new Date().getTime());',
             'f.close();',
             'app.consoleout("Fichier : " + f.fsName);',
             'app.consoleout("Existe  : " + f.exists);',
-            'app.consoleout("Taille  : " + f.length + " octets");',
-            'if (!f.exists) { throw new Error("Fichier output.txt non créé !"); }',
-            'app.consoleout("=== Fin test output ===");',
+            'if (!f.exists) { throw new Error("Fichier output.txt non cree"); }',
+            'app.consoleout("Test output RunScript S3 OK");',
         ].join('\n');
 
         const jobData = {
