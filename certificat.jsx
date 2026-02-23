@@ -20,9 +20,15 @@ app.consoleout("Date : " + certDate);
 app.consoleout("InDesign version : " + app.version);
 
 // ── Mode serveur : supprimer TOUS les dialogues InDesign ──────────────────
-// Sans ça, une alerte "lien manquant" ou "police manquante" bloque le serveur
-// et l'export échoue silencieusement sans lancer d'exception catchable.
-app.scriptPreferences.userInteractionLevel = UserInteractionLevels.NEVER_INTERACT;
+// UserInteractionLevels n'est pas défini dans tous les contextes RunScript.
+// InDesign Server est headless par défaut → ce bloc est optionnel.
+// Le try/catch évite un crash si l'énumération n'est pas disponible.
+try {
+    app.scriptPreferences.userInteractionLevel = UserInteractionLevels.NEVER_INTERACT;
+    app.consoleout("Mode NEVER_INTERACT activé");
+} catch (uiErr) {
+    app.consoleout("UserInteractionLevels non disponible (ignoré) : " + uiErr.toString());
+}
 
 try {
     // ── Ouverture du document IDML ─────────────────────────────────────────
