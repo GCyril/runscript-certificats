@@ -100,7 +100,12 @@ try {
     app.consoleout("PDF cible : " + pdfFile.fsName);
 
     // Désactiver l'ouverture automatique du PDF après export
-    app.pdfExportPreferences.viewDocumentAfterExport = false;
+    // viewDocumentAfterExport est desktop uniquement — ignoré sur InDesign Server
+    try {
+        app.pdfExportPreferences.viewDocumentAfterExport = false;
+    } catch (vdErr) {
+        app.consoleout("viewDocumentAfterExport non disponible (ignoré) : " + vdErr.toString());
+    }
 
     // Export sans preset dédié — utilisation des préférences courantes.
     // Recommandation Typefi : créer un preset nommé "CertificatPDF" dans InDesign,
