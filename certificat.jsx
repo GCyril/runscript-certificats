@@ -13,50 +13,68 @@ if (app.scriptArgs.isDefined("Date")) {
     certDate = app.scriptArgs.getValue("Date");
 }
 
-$.writeln("=== Démarrage du script certificat.jsx ===");
-$.writeln("Nom  : " + recipientName);
-$.writeln("Date : " + certDate);
+app.consoleout("=== Démarrage certificat.jsx ===");
+app.consoleout("Nom  : " + recipientName);
+app.consoleout("Date : " + certDate);
 
 try {
     // ── Ouverture du document ──────────────────────────────────────────────
-    var doc = app.open(File("Commendation-mountains.indd"));
-    $.writeln("✅ Document ouvert : " + doc.name);
+    var inddFile = File("Commendation-mountains.indd");
+    app.consoleout("Chemin du fichier : " + inddFile.fsName);
+    app.consoleout("Fichier existe    : " + inddFile.exists);
+
+    var doc = app.open(inddFile);
+    app.consoleout("Document ouvert   : " + doc.name);
 
     // ── Remplacement de <<Nom>> ────────────────────────────────────────────
     app.findGrepPreferences  = NothingEnum.nothing;
     app.changeGrepPreferences = NothingEnum.nothing;
-
     app.findGrepPreferences.findWhat   = "<<Nom>>";
     app.changeGrepPreferences.changeTo = recipientName;
     var foundNames = doc.changeGrep();
-    $.writeln("✅ <<Nom>>  → " + recipientName + "  (" + foundNames.length + " remplacement(s))");
+    app.consoleout("<<Nom>>  : " + foundNames.length + " remplacement(s)");
 
     // ── Remplacement de <<Date>> ───────────────────────────────────────────
     app.findGrepPreferences  = NothingEnum.nothing;
     app.changeGrepPreferences = NothingEnum.nothing;
-
     app.findGrepPreferences.findWhat   = "<<Date>>";
     app.changeGrepPreferences.changeTo = certDate;
     var foundDates = doc.changeGrep();
-    $.writeln("✅ <<Date>> → " + certDate + "  (" + foundDates.length + " remplacement(s))");
+    app.consoleout("<<Date>> : " + foundDates.length + " remplacement(s)");
 
-    // ── Export PDF ────────────────────────────────────────────────────────
-    var pdfPreset = app.pdfExportPresets.item("[High Quality Print]");
-    if (!pdfPreset.isValid) {
-        pdfPreset = app.pdfExportPresets.item("[Press Quality]");
-        $.writeln("⚠️  Préréglage '[High Quality Print]' introuvable → utilisation de '[Press Quality]'");
+    // ── Export PDF (sans dépendre d'un preset nommé) ──────────────────────
+    var pdfFile = new File("certificat.pdf");
+
+    // Chercher un preset disponible, sinon utiliser les préférences par défaut
+    var presetNames = ["[High Quality Print]", "[Press Quality]",
+                       "[PDF/X-4:2008]", "[PDF/X-1a:2001]", "[Smallest File Size]"];
+    var pdfPreset = null;
+    for (var i = 0; i < presetNames.length; i++) {
+        var candidate = app.pdfExportPresets.item(presetNames[i]);
+        if (candidate.isValid) {
+            pdfPreset = candidate;
+            app.consoleout("Preset PDF utilisé : " + presetNames[i]);
+            break;
+        }
     }
 
-    var pdfFile = new File("certificat.pdf");
-    doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false, pdfPreset);
-    $.writeln("✅ PDF exporté : " + pdfFile.fsName);
+    if (pdfPreset) {
+        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false, pdfPreset);
+    } else {
+        // Fallback : export avec les préférences courantes (pas de preset nommé)
+        app.consoleout("Aucun preset trouvé, export avec préférences par défaut.");
+        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false);
+    }
+
+    app.consoleout("PDF exporté : " + pdfFile.fsName);
+    app.consoleout("PDF existe  : " + pdfFile.exists);
 
     // ── Fermeture sans sauvegarde ─────────────────────────────────────────
     doc.close(SaveOptions.NO);
-    $.writeln("✅ Document fermé. Script terminé avec succès.");
+    app.consoleout("=== Script terminé avec succès ===");
 
 } catch (error) {
-    $.writeln("❌ Erreur dans certificat.jsx : " + error.toString());
-    // Le throw indique à RunScript de marquer le job comme "failed"
+    app.consoleout("ERREUR : " + error.toString());
+    app.consoleout("Ligne  : " + error.line);
     throw error;
 }
