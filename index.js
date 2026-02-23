@@ -165,11 +165,12 @@ app.post('/generate', async (req, res) => {
         console.log(`📦 Génération des URLs d'accès aux assets depuis "${S3_ASSETS_BUCKET}"...`);
         // IDML (InDesign Markup Language) : format XML indépendant de la version.
         // Remplace le .indd v21 (InDesign 2025) incompatible avec RunScript v20 (2024).
-        const [idmlUrl, tifUrl, font1Url, font2Url] = await Promise.all([
+        const [idmlUrl, tifUrl, font1Url, font2Url, font3Url] = await Promise.all([
             generateS3AssetUrl('Commendation-mountains.idml'),
             generateS3AssetUrl('fond-mountains.tif'),
             generateS3AssetUrl('opensans.ttf'),
             generateS3AssetUrl('opensans bold.ttf'),
+            generateS3AssetUrl('opensans bolditalic.ttf'),
         ]);
 
         // Le cache RunScript est basé sur les fichiers d'entrée (pas le script ni les args).
@@ -185,6 +186,7 @@ app.post('/generate', async (req, res) => {
             { href: tifUrl,   path: 'fond-mountains.tif' },
             { href: font1Url, path: 'Document Fonts/opensans.ttf' },
             { href: font2Url, path: 'Document Fonts/opensans bold.ttf' },
+            { href: font3Url, path: 'Document Fonts/opensans bolditalic.ttf' },
         ];
         if (cacheBustUrl) {
             inputs.push({ href: cacheBustUrl, path: '_cache-bust.txt' });

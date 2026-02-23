@@ -3,26 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Générateur de certificats</title>
+  <title>Certificats We Are Moving Mountains</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0c0d11;
-      --card:     #12141a;
-      --border:   rgba(201, 160, 103, 0.25);
-      --gold:     #c9a067;
-      --gold-dim: rgba(201, 160, 103, 0.55);
-      --cream:    #f0e8d8;
-      --muted:    rgba(240, 232, 216, 0.45);
-      --error:    #c0504a;
-      --success:  #5a9e6f;
+      --bg:        #e8e0d4;
+      --card:      #faf7f2;
+      --border:    rgba(166, 124, 46, 0.28);
+      --gold:      #a67c2e;
+      --gold-dim:  rgba(166, 124, 46, 0.5);
+      --gold-bg:   rgba(166, 124, 46, 0.07);
+      --text:      #231e17;
+      --muted:     rgba(35, 30, 23, 0.5);
+      --error:     #b84040;
+      --success:   #3d7a55;
     }
 
-    /* ── Fond avec grain ──────────────────────────────────────────── */
+    /* ── Fond ─────────────────────────────────────────────────────── */
     body {
       min-height: 100vh;
       display: flex;
@@ -32,26 +33,15 @@
       font-family: 'DM Sans', sans-serif;
       padding: 2rem;
       position: relative;
-      overflow: hidden;
     }
 
     body::before {
       content: '';
       position: fixed; inset: 0;
       background-image:
-        radial-gradient(ellipse 80% 60% at 20% 110%, rgba(201,160,103,0.07) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 80% -10%, rgba(201,160,103,0.05) 0%, transparent 55%);
+        radial-gradient(ellipse 80% 60% at 15% 105%, rgba(166,124,46,0.13) 0%, transparent 58%),
+        radial-gradient(ellipse 55% 45% at 85% -5%,  rgba(166,124,46,0.09) 0%, transparent 52%);
       pointer-events: none;
-    }
-
-    /* Grain overlay */
-    body::after {
-      content: '';
-      position: fixed; inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-      background-size: 200px 200px;
-      pointer-events: none;
-      opacity: 0.6;
     }
 
     /* ── Carte principale ─────────────────────────────────────────── */
@@ -62,11 +52,15 @@
       background: var(--card);
       border: 1px solid var(--border);
       padding: 3rem 3rem 2.75rem;
+      box-shadow:
+        0 2px 0 rgba(166,124,46,0.12),
+        0 4px 32px rgba(35,30,23,0.08),
+        0 1px 4px  rgba(35,30,23,0.05);
       animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
 
     @keyframes rise {
-      from { opacity: 0; transform: translateY(22px); }
+      from { opacity: 0; transform: translateY(20px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
@@ -79,8 +73,8 @@
       border-color: var(--gold);
       border-style: solid;
     }
-    .card::before  { top: 10px; left: 10px;  border-width: 1px 0 0 1px; }
-    .card::after   { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
+    .card::before  { top: 10px;    left: 10px;  border-width: 1px 0 0 1px; }
+    .card::after   { top: 10px;    right: 10px; border-width: 1px 1px 0 0; }
     .corner-bl     { bottom: 10px; left: 10px;  border-width: 0 0 1px 1px; }
     .corner-br     { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
 
@@ -91,29 +85,21 @@
       animation: rise 0.7s 0.05s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
 
-    .eyebrow {
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.65rem;
-      font-weight: 500;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      color: var(--gold);
-      margin-bottom: 0.75rem;
-    }
-
     .title {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 2rem;
-      font-weight: 300;
-      color: var(--cream);
-      line-height: 1.15;
+      font-size: 1.1rem;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.45;
       letter-spacing: 0.01em;
     }
 
-    .title em {
-      font-style: italic;
-      font-weight: 400;
+    .title strong {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 600;
       color: var(--gold);
+      letter-spacing: 0.02em;
+      margin-top: 0.2rem;
     }
 
     .divider {
@@ -153,15 +139,15 @@
       border: none;
       border-bottom: 1px solid var(--border);
       padding: 0.5rem 0 0.6rem;
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 1.15rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
       font-weight: 300;
-      color: var(--cream);
+      color: var(--text);
       outline: none;
       transition: border-color 0.25s;
       caret-color: var(--gold);
     }
-    .field input::placeholder { color: rgba(240,232,216,0.18); }
+    .field input::placeholder { color: rgba(35,30,23,0.22); }
     .field input:focus         { border-bottom-color: var(--gold); }
 
     .field-bar {
@@ -198,8 +184,7 @@
 
     .btn::before {
       content: '';
-      position: absolute;
-      inset: 0;
+      position: absolute; inset: 0;
       background: var(--gold);
       transform: scaleX(0);
       transform-origin: left;
@@ -207,10 +192,9 @@
       z-index: 0;
     }
     .btn:hover:not(:disabled)::before { transform: scaleX(1); }
-    .btn:hover:not(:disabled)  { color: var(--bg); border-color: var(--gold); }
+    .btn:hover:not(:disabled)  { color: var(--card); border-color: var(--gold); }
     .btn:active:not(:disabled) { opacity: 0.85; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
     .btn span { position: relative; z-index: 1; }
 
     /* ── Zone de statut ───────────────────────────────────────────── */
@@ -220,7 +204,6 @@
       border-left: 2px solid transparent;
       font-size: 0.82rem;
       line-height: 1.6;
-      color: var(--muted);
       opacity: 0;
       max-height: 0;
       overflow: hidden;
@@ -230,13 +213,13 @@
       opacity: 1;
       max-height: 200px;
     }
-    .status-box.waiting  { border-color: var(--gold-dim);  background: rgba(201,160,103,0.05); }
-    .status-box.success  { border-color: var(--success);   background: rgba(90,158,111,0.07); }
-    .status-box.error    { border-color: var(--error);      background: rgba(192,80,74,0.07); }
+    .status-box.waiting  { border-color: var(--gold-dim); background: var(--gold-bg); }
+    .status-box.success  { border-color: var(--success);  background: rgba(61,122,85,0.07); }
+    .status-box.error    { border-color: var(--error);     background: rgba(184,64,64,0.06); }
 
     .status-box .status-label {
       font-size: 0.62rem;
-      font-weight: 500;
+      font-weight: 600;
       letter-spacing: 0.18em;
       text-transform: uppercase;
       margin-bottom: 0.35rem;
@@ -245,7 +228,7 @@
     .status-box.success .status-label { color: var(--success); }
     .status-box.error   .status-label { color: var(--error); }
 
-    .status-box .status-text { color: var(--cream); opacity: 0.75; }
+    .status-box .status-text { color: var(--text); opacity: 0.7; }
 
     /* Spinner */
     .spinner {
@@ -265,9 +248,9 @@
       display: block;
       margin-top: 0.75rem;
       padding: 0.6rem 1rem;
-      background: rgba(90,158,111,0.15);
-      border: 1px solid rgba(90,158,111,0.4);
-      color: #7dbe96;
+      background: rgba(61,122,85,0.1);
+      border: 1px solid rgba(61,122,85,0.35);
+      color: var(--success);
       font-family: 'DM Sans', sans-serif;
       font-size: 0.68rem;
       font-weight: 500;
@@ -279,9 +262,8 @@
       transition: background 0.2s, border-color 0.2s;
     }
     .download-btn:hover {
-      background: rgba(90,158,111,0.25);
-      border-color: rgba(90,158,111,0.7);
-      color: #a0d4b5;
+      background: rgba(61,122,85,0.18);
+      border-color: rgba(61,122,85,0.6);
     }
 
     /* ── Pied de page ─────────────────────────────────────────────── */
@@ -291,7 +273,7 @@
       font-size: 0.6rem;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: rgba(240,232,216,0.18);
+      color: rgba(35,30,23,0.22);
       animation: rise 0.7s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
   </style>
@@ -303,8 +285,10 @@
     <div class="corner-br"></div>
 
     <div class="header">
-      <p class="eyebrow">Typefi · RunScript</p>
-      <h1 class="title">Générateur de<br><em>certificats</em></h1>
+      <h1 class="title">
+        Certificats
+        <strong>We Are Moving Mountains</strong>
+      </h1>
       <div class="divider">
         <div class="divider-line"></div>
         <div class="divider-dot"></div>
@@ -357,9 +341,9 @@
   </div>
 
   <script>
-    const form      = document.getElementById('certForm');
-    const submitBtn = document.getElementById('submitBtn');
-    const statusBox = document.getElementById('statusBox');
+    const form        = document.getElementById('certForm');
+    const submitBtn   = document.getElementById('submitBtn');
+    const statusBox   = document.getElementById('statusBox');
     const statusLabel = document.getElementById('statusLabel');
     const statusText  = document.getElementById('statusText');
 
