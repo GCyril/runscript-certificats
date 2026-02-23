@@ -140,7 +140,7 @@ app.post('/generate', async (req, res) => {
         }
 
         console.log('📝 Nouvelle demande de certificat pour:', nom, '|', date);
-        const s3Key = `certificates/${Date.now()}_${nom.replace(/ /g, '_')}.pdf`;
+        const s3Key = `certificates/${nom}.pdf`;
 
         // Lire le script JSX
         const script = await fs.readFile(path.join(__dirname, 'certificat.jsx'), 'utf8');

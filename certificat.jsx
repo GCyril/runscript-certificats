@@ -14,6 +14,11 @@ if (app.scriptArgs.isDefined("Date")) {
     certDate = app.scriptArgs.getValue("Date");
 }
 
+// Le champ Nom est affiché en majuscules dans le certificat.
+// On force toUpperCase() ici plutôt que de dépendre du style InDesign
+// (le changeGrep peut ne pas hériter du All Caps du placeholder).
+recipientName = recipientName.toUpperCase();
+
 app.consoleout("=== Démarrage certificat.jsx ===");
 app.consoleout("Nom  : " + recipientName);
 app.consoleout("Date : " + certDate);
