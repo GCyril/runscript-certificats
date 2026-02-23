@@ -359,6 +359,77 @@ app.get('/test-runscript-output', async (req, res) => {
 });
 
 
+// ── Diagnostic : chemins réels ExtendScript + logIDS (echec intentionnel) ─
+// Cache-buster dans la source du script (timestamp) pour forcer un vrai job.
+// Le script ECHOUE intentionnellement via throw — cela force RunScript à
+// inclure le champ logIDS dans la réponse avec tous les app.consoleout().
+// Polling 120s car les vrais jobs InDesign prennent souvent >90s.
+app.get('/test-runscript-diag', async (req, res) => {
+    try {
+        const inddUrl    = await generateS3AssetUrl('Commendation-mountains.indd');
+        const auth       = { username: RUNSCRIPT_KEY, password: RUNSCRIPT_SECRET };
+        const cacheBust  = Date.now();
+
+        const diagScript = [
+            '// diag : ECHEC INTENTIONNEL pour forcer logIDS',
+            '// cache-bust : ' + cacheBust,
+            '#target indesign',
+            'app.consoleout("=== DIAG PATHS ===");',
+            'app.consoleout("app.version  : " + app.version);',
+            'var inddFile = File("Commendation-mountains.indd");',
+            'app.consoleout("INDD fsName  : " + inddFile.fsName);',
+            'app.consoleout("INDD existe  : " + inddFile.exists);',
+            'var workDir = inddFile.parent;',
+            'app.consoleout("workDir      : " + workDir.fsName);',
+            'var absOut = new File(workDir.fsName + "/output.txt");',
+            'app.consoleout("absOut fsName : " + absOut.fsName);',
+            'var relOut = new File("output.txt");',
+            'app.consoleout("relOut fsName : " + relOut.fsName);',
+            'throw new Error("FORCE_LOGIDS");',
+        ].join('\n');
+
+        const jobData = {
+            inputs:  [{ href: inddUrl, path: 'Commendation-mountains.indd' }],
+            outputs: [],
+            script:  diagScript,
+        };
+
+        console.log(`🔬 Diag RunScript paths — cache-bust: ${cacheBust}`);
+        const submitResp = await axios.post(
+            'https://runscript.typefi.com/api/v2/job?async=true',
+            jobData,
+            { auth, timeout: 30000 }
+        );
+        const jobId = submitResp.data._id;
+        console.log(`🔬 Diag job soumis : ${jobId}`);
+
+        // Polling jusqu'à 120s (les vrais jobs InDesign Server prennent souvent >90s)
+        let fullResult = null;
+        for (let i = 0; i < 40; i++) {
+            await new Promise(r => setTimeout(r, 3000));
+            const poll = await axios.get(
+                `https://runscript.typefi.com/api/v2/job/${jobId}`,
+                { auth }
+            );
+            console.log(`🔬 Poll ${i + 1}/40 : status=${poll.data.status}`);
+            if (poll.data.status === 'complete' || poll.data.status === 'failed') {
+                fullResult = poll.data;
+                break;
+            }
+        }
+
+        console.log(`🔬 Diag terminé — result: ${fullResult?.result} | logIDS: ${fullResult?.logIDS ? 'PRESENT' : 'absent'}`);
+        res.json({
+            status:     'OK',
+            fullResult: fullResult || { error: 'timeout apres 120s' },
+            note:       'Lisez logIDS dans fullResult — il contient tous les app.consoleout()',
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message, details: error.response?.data });
+    }
+});
+
+
 // ── Test S3 upload direct depuis Node.js ──────────────────────────────────
 app.get('/test-upload', async (req, res) => {
     try {
