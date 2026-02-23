@@ -33,6 +33,11 @@ const s3Client = new S3Client({
         accessKeyId: AWS_ACCESS_KEY_ID,
         secretAccessKey: AWS_SECRET_ACCESS_KEY
     },
+    // Désactive les checksums automatiques du SDK v3 dans les URLs presignées.
+    // Sans ça, le SDK ajoute x-amz-sdk-checksum-algorithm dans les headers signés,
+    // et RunScript ne les envoie pas → S3 rejette l'upload (SignatureDoesNotMatch).
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
 });
 // =============================
 
