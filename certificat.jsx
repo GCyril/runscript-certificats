@@ -98,25 +98,46 @@ try {
     // Chemin absolu dans le dossier de travail (même répertoire que l'IDML).
     var pdfFile = new File(docFolder.fsName + "/certificat.pdf");
     app.consoleout("PDF cible : " + pdfFile.fsName);
+    app.consoleout("Nombre de presets PDF : " + app.pdfExportPresets.length);
 
-    // Désactiver l'ouverture automatique du PDF après export
-    // viewDocumentAfterExport est desktop uniquement — ignoré sur InDesign Server
-    try {
-        app.pdfExportPreferences.viewDocumentAfterExport = false;
-    } catch (vdErr) {
-        app.consoleout("viewDocumentAfterExport non disponible (ignoré) : " + vdErr.toString());
+    // Sur InDesign Server, exportFile requiert un PDFExportPreset explicite.
+    // (Contrairement à InDesign Desktop, le paramètre showingOptions/booléen
+    //  n'est pas accepté — InDesign Server attend le preset comme 3e argument.)
+    // On essaie les presets intégrés dans l'ordre de préférence, puis fallback
+    // sur le premier preset disponible.
+    var pdfPreset = null;
+    var presetCandidates = [
+        "[High Quality Print]",
+        "[PDF/X-4:2008]",
+        "[Press Quality]",
+        "[PDF/X-1a:2001]",
+        "[Smallest File Size]"
+    ];
+    for (var p = 0; p < presetCandidates.length; p++) {
+        try {
+            var candidate = app.pdfExportPresets.item(presetCandidates[p]);
+            if (candidate.isValid) {
+                pdfPreset = candidate;
+                app.consoleout("Preset PDF selectionne : " + presetCandidates[p]);
+                break;
+            }
+        } catch (pErr) {
+            app.consoleout("Preset " + presetCandidates[p] + " non dispo : " + pErr.toString());
+        }
+    }
+    // Fallback : premier preset disponible quel qu'il soit
+    if (!pdfPreset && app.pdfExportPresets.length > 0) {
+        pdfPreset = app.pdfExportPresets[0];
+        app.consoleout("Preset PDF fallback (index 0) : " + pdfPreset.name);
     }
 
-    // Export sans preset dédié — utilisation des préférences courantes.
-    // Recommandation Typefi : créer un preset nommé "CertificatPDF" dans InDesign,
-    // l'embarquer dans l'IDML, et décommenter les lignes ci-dessous.
-    // var pdfPreset = app.pdfExportPresets.item("CertificatPDF");
-    // if (pdfPreset.isValid) {
-    //     doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false, pdfPreset);
-    // } else {
-    //     doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false);
-    // }
-    doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false);
+    if (pdfPreset) {
+        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false, pdfPreset);
+    } else {
+        // Dernier recours sans preset (peut échouer sur InDesign Server)
+        app.consoleout("Aucun preset PDF trouvé — tentative sans preset");
+        doc.exportFile(ExportFormat.PDF_TYPE, pdfFile, false);
+    }
 
     app.consoleout("PDF exporté : " + pdfFile.fsName);
     app.consoleout("PDF existe  : " + pdfFile.exists);
