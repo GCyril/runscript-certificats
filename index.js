@@ -388,9 +388,13 @@ app.get('/test-runscript-diag', async (req, res) => {
             'throw new Error("FORCE_LOGIDS");',
         ].join('\n');
 
+        // IMPORTANT : la clé de cache RunScript = inputs + args (PAS le script).
+        // Sans args uniques, même script différent → résultat caché → script jamais exécuté.
+        // L'arg cacheBust force un vrai job InDesign Server à chaque appel.
         const jobData = {
             inputs:  [{ href: inddUrl, path: 'Commendation-mountains.indd' }],
             outputs: [],
+            args:    [{ name: 'cacheBust', value: cacheBust.toString() }],
             script:  diagScript,
         };
 
