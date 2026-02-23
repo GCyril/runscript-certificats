@@ -48,12 +48,12 @@
     .card {
       position: relative;
       width: 100%;
-      max-width: 440px;
+      max-width: 480px;
       background: var(--card);
       border: 1px solid var(--border);
       padding: 3rem 3rem 2.75rem;
       box-shadow:
-        0 2px 0 rgba(166,124,46,0.12),
+        0 2px 0   rgba(166,124,46,0.12),
         0 4px 32px rgba(35,30,23,0.08),
         0 1px 4px  rgba(35,30,23,0.05);
       animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -64,7 +64,7 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* Coins dorés décoratifs */
+    /* Coins dorés */
     .card::before, .card::after,
     .corner-bl, .corner-br {
       content: '';
@@ -82,7 +82,6 @@
     .header {
       text-align: center;
       margin-bottom: 2.5rem;
-      animation: rise 0.7s 0.05s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
 
     .title {
@@ -90,7 +89,6 @@
       font-weight: 400;
       color: var(--text);
       line-height: 1.45;
-      letter-spacing: 0.01em;
     }
 
     .title strong {
@@ -111,15 +109,8 @@
     .divider-line { flex: 1; height: 1px; background: var(--border); }
     .divider-dot  { width: 4px; height: 4px; background: var(--gold-dim); transform: rotate(45deg); flex-shrink: 0; }
 
-    /* ── Champs ───────────────────────────────────────────────────── */
-    .fields {
-      display: flex;
-      flex-direction: column;
-      gap: 1.75rem;
-      animation: rise 0.7s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
-    }
-
-    .field { position: relative; }
+    /* ── Champ date ───────────────────────────────────────────────── */
+    .field { position: relative; margin-bottom: 2rem; }
 
     .field label {
       display: block;
@@ -129,9 +120,7 @@
       text-transform: uppercase;
       color: var(--gold);
       margin-bottom: 0.6rem;
-      transition: color 0.2s;
     }
-    .field:focus-within label { color: var(--gold); }
 
     .field input {
       width: 100%;
@@ -159,11 +148,126 @@
     }
     .field input:focus ~ .field-bar { width: 100%; }
 
-    /* ── Bouton ───────────────────────────────────────────────────── */
-    .btn-wrap {
-      margin-top: 2.5rem;
-      animation: rise 0.7s 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+    /* ── Section noms ─────────────────────────────────────────────── */
+    .names-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
     }
+
+    .names-label {
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    .names-count {
+      font-size: 0.65rem;
+      font-weight: 400;
+      color: var(--gold-dim);
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Rangées de noms ──────────────────────────────────────────── */
+    #namesList {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .name-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.5rem;
+      animation: fadeIn 0.25s ease both;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .name-field {
+      flex: 1;
+      position: relative;
+      margin-bottom: 0;
+    }
+
+    .name-field input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      padding: 0.5rem 0 0.6rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 300;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.25s;
+      caret-color: var(--gold);
+    }
+    .name-field input::placeholder { color: rgba(35,30,23,0.22); }
+    .name-field input:focus         { border-bottom-color: var(--gold); }
+
+    .name-bar {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 1px; width: 0;
+      background: var(--gold);
+      transition: width 0.35s cubic-bezier(0.4,0,0.2,1);
+    }
+    .name-field input:focus ~ .name-bar { width: 100%; }
+
+    .remove-btn {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--gold-dim);
+      font-size: 1rem;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1px;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .remove-btn:hover {
+      color: var(--error);
+      border-color: rgba(184,64,64,0.4);
+      background: rgba(184,64,64,0.05);
+    }
+    .remove-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+    /* ── Bouton ajouter un nom ────────────────────────────────────── */
+    .add-btn {
+      margin-top: 1rem;
+      padding: 0.45rem 0.75rem;
+      background: none;
+      border: 1px dashed var(--border);
+      color: var(--gold-dim);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      width: 100%;
+      text-align: center;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .add-btn:hover {
+      color: var(--gold);
+      border-color: var(--gold-dim);
+      background: var(--gold-bg);
+    }
+
+    /* ── Bouton principal ─────────────────────────────────────────── */
+    .btn-wrap { margin-top: 2rem; }
 
     .btn {
       width: 100%;
@@ -181,7 +285,6 @@
       overflow: hidden;
       transition: color 0.3s, border-color 0.3s;
     }
-
     .btn::before {
       content: '';
       position: absolute; inset: 0;
@@ -192,78 +295,98 @@
       z-index: 0;
     }
     .btn:hover:not(:disabled)::before { transform: scaleX(1); }
-    .btn:hover:not(:disabled)  { color: var(--card); border-color: var(--gold); }
+    .btn:hover:not(:disabled) { color: var(--card); border-color: var(--gold); }
     .btn:active:not(:disabled) { opacity: 0.85; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn span { position: relative; z-index: 1; }
 
-    /* ── Zone de statut ───────────────────────────────────────────── */
-    .status-box {
+    /* ── Liste de résultats ───────────────────────────────────────── */
+    #resultsList {
       margin-top: 1.75rem;
-      padding: 1rem 1.25rem;
-      border-left: 2px solid transparent;
-      font-size: 0.82rem;
-      line-height: 1.6;
-      opacity: 0;
-      max-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--border);
+      animation: fadeIn 0.3s ease both;
+    }
+    .result-item:first-child { border-top: 1px solid var(--border); }
+
+    .result-name {
+      flex: 1;
+      font-size: 0.85rem;
+      font-weight: 400;
+      color: var(--text);
+      min-width: 0;
+      white-space: nowrap;
       overflow: hidden;
-      transition: opacity 0.4s, max-height 0.4s, border-color 0.4s, background 0.4s;
+      text-overflow: ellipsis;
     }
-    .status-box.visible {
-      opacity: 1;
-      max-height: 200px;
-    }
-    .status-box.waiting  { border-color: var(--gold-dim); background: var(--gold-bg); }
-    .status-box.success  { border-color: var(--success);  background: rgba(61,122,85,0.07); }
-    .status-box.error    { border-color: var(--error);     background: rgba(184,64,64,0.06); }
 
-    .status-box .status-label {
-      font-size: 0.62rem;
-      font-weight: 600;
-      letter-spacing: 0.18em;
+    .result-status {
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      margin-bottom: 0.35rem;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .status-box.waiting .status-label { color: var(--gold); }
-    .status-box.success .status-label { color: var(--success); }
-    .status-box.error   .status-label { color: var(--error); }
+    .result-status.waiting  { color: var(--gold-dim); }
+    .result-status.running  { color: var(--gold); }
+    .result-status.done     { color: var(--success); }
+    .result-status.failed   { color: var(--error); }
 
-    .status-box .status-text { color: var(--text); opacity: 0.7; }
-
-    /* Spinner */
-    .spinner {
-      display: inline-block;
-      width: 10px; height: 10px;
-      border: 1.5px solid var(--gold-dim);
-      border-top-color: var(--gold);
-      border-radius: 50%;
-      animation: spin 0.75s linear infinite;
-      margin-right: 0.5rem;
-      vertical-align: middle;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Bouton téléchargement ────────────────────────────────────── */
-    .download-btn {
-      display: block;
-      margin-top: 0.75rem;
-      padding: 0.6rem 1rem;
+    .result-download {
+      flex-shrink: 0;
+      padding: 0.3rem 0.65rem;
       background: rgba(61,122,85,0.1);
       border: 1px solid rgba(61,122,85,0.35);
       color: var(--success);
       font-family: 'DM Sans', sans-serif;
-      font-size: 0.68rem;
+      font-size: 0.62rem;
       font-weight: 500;
-      letter-spacing: 0.15em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
       text-decoration: none;
-      text-align: center;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
+      transition: background 0.2s;
     }
-    .download-btn:hover {
-      background: rgba(61,122,85,0.18);
-      border-color: rgba(61,122,85,0.6);
+    .result-download:hover {
+      background: rgba(61,122,85,0.2);
+    }
+
+    /* Spinner inline */
+    .spinner {
+      display: inline-block;
+      width: 9px; height: 9px;
+      border: 1.5px solid var(--gold-dim);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.3rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Barre de progression globale ────────────────────────────── */
+    .progress-bar-wrap {
+      margin-top: 1.25rem;
+      height: 2px;
+      background: var(--border);
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar-wrap.visible { display: block; }
+    .progress-bar {
+      height: 100%;
+      background: var(--gold);
+      transition: width 0.4s ease;
+      width: 0%;
     }
 
     /* ── Pied de page ─────────────────────────────────────────────── */
@@ -274,7 +397,6 @@
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: rgba(35,30,23,0.22);
-      animation: rise 0.7s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
   </style>
 </head>
@@ -284,6 +406,7 @@
     <div class="corner-bl"></div>
     <div class="corner-br"></div>
 
+    <!-- En-tête -->
     <div class="header">
       <h1 class="title">
         Certificats
@@ -297,106 +420,163 @@
     </div>
 
     <form id="certForm" novalidate>
-      <div class="fields">
 
-        <div class="field">
-          <label for="nom">Nom du bénéficiaire</label>
-          <input
-            type="text"
-            id="nom"
-            name="nom"
-            placeholder="Marie-Claire Dupont"
-            autocomplete="name"
-            required>
-          <div class="field-bar"></div>
-        </div>
-
-        <div class="field">
-          <label for="date">Date du certificat</label>
-          <input
-            type="text"
-            id="date"
-            name="date"
-            placeholder="17 janvier 2026"
-            required>
-          <div class="field-bar"></div>
-        </div>
-
+      <!-- Date partagée -->
+      <div class="field">
+        <label for="date">Date du certificat</label>
+        <input
+          type="text"
+          id="date"
+          name="date"
+          placeholder="17 janvier 2026"
+          required>
+        <div class="field-bar"></div>
       </div>
+
+      <!-- Noms -->
+      <div class="names-header">
+        <span class="names-label">Noms des bénéficiaires</span>
+        <span class="names-count" id="namesCount">1 certificat</span>
+      </div>
+
+      <div id="namesList">
+        <!-- Rangées ajoutées dynamiquement -->
+      </div>
+
+      <button type="button" class="add-btn" id="addNameBtn">+ Ajouter un nom</button>
 
       <div class="btn-wrap">
         <button type="submit" class="btn" id="submitBtn">
-          <span>Générer le certificat</span>
+          <span id="submitLabel">Générer le certificat</span>
         </button>
       </div>
+
     </form>
 
-    <!-- Zone de statut -->
-    <div class="status-box" id="statusBox" role="status" aria-live="polite">
-      <div class="status-label" id="statusLabel"></div>
-      <div class="status-text"  id="statusText"></div>
+    <!-- Barre de progression globale -->
+    <div class="progress-bar-wrap" id="progressWrap">
+      <div class="progress-bar" id="progressBar"></div>
     </div>
+
+    <!-- Liste de résultats -->
+    <div id="resultsList"></div>
 
     <p class="footer">InDesign Server · AWS S3</p>
   </div>
 
   <script>
+    // ── État ─────────────────────────────────────────────────────────
+    let rowCount    = 0;
+    let activeJobs  = [];   // { nom, jobId, status, el }
+    let pollTimer   = null;
+
+    // ── Références DOM ───────────────────────────────────────────────
     const form        = document.getElementById('certForm');
     const submitBtn   = document.getElementById('submitBtn');
-    const statusBox   = document.getElementById('statusBox');
-    const statusLabel = document.getElementById('statusLabel');
-    const statusText  = document.getElementById('statusText');
+    const submitLabel = document.getElementById('submitLabel');
+    const namesList   = document.getElementById('namesList');
+    const namesCount  = document.getElementById('namesCount');
+    const addNameBtn  = document.getElementById('addNameBtn');
+    const resultsList = document.getElementById('resultsList');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressBar  = document.getElementById('progressBar');
 
-    let pollTimer = null;
-
-    // ── Affichage du statut ──────────────────────────────────────────
-    function showStatus(type, label, text, extra = '') {
-      statusBox.className = 'status-box visible ' + type;
-      statusLabel.textContent = label;
-      statusText.innerHTML = text + extra;
+    // ── Gestion des rangées de noms ──────────────────────────────────
+    function addNameRow(placeholder) {
+      rowCount++;
+      const row = document.createElement('div');
+      row.className = 'name-row';
+      row.dataset.id = rowCount;
+      row.innerHTML = `
+        <div class="name-field">
+          <input type="text"
+            placeholder="${placeholder || 'Marie-Claire Dupont'}"
+            autocomplete="off">
+          <div class="name-bar"></div>
+        </div>
+        <button type="button" class="remove-btn" title="Supprimer" aria-label="Supprimer ce nom">×</button>
+      `;
+      row.querySelector('.remove-btn').addEventListener('click', () => removeRow(row));
+      namesList.appendChild(row);
+      updateCount();
+      row.querySelector('input').focus();
+      return row;
     }
 
-    function resetStatus() {
-      statusBox.className = 'status-box';
-      statusLabel.textContent = '';
-      statusText.innerHTML = '';
+    function removeRow(row) {
+      const rows = namesList.querySelectorAll('.name-row');
+      if (rows.length <= 1) return; // toujours au moins 1
+      row.remove();
+      updateCount();
     }
 
-    // ── Polling ──────────────────────────────────────────────────────
-    function startPolling(jobId) {
-      showStatus('waiting', 'En cours',
-        '<span class="spinner"></span>InDesign génère votre certificat…');
+    function updateCount() {
+      const n = namesList.querySelectorAll('.name-row').length;
+      namesCount.textContent = n === 1 ? '1 certificat' : `${n} certificats`;
+      submitLabel.textContent = n === 1 ? 'Générer le certificat' : `Générer ${n} certificats`;
+      // Le × du seul champ restant est désactivé
+      namesList.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.disabled = (n === 1);
+      });
+    }
 
-      pollTimer = setInterval(async () => {
-        try {
-          const res  = await fetch(`/check-status/${jobId}`);
-          const data = await res.json();
+    function getNames() {
+      return Array.from(namesList.querySelectorAll('.name-row input'))
+        .map(i => i.value.trim())
+        .filter(v => v.length > 0);
+    }
 
-          if (data.status === 'done') {
-            clearInterval(pollTimer);
-            showStatus('success', 'Terminé',
-              'Votre certificat est prêt.',
-              `<br><a class="download-btn" href="${data.downloadUrl}" download>
-                ↓ &nbsp; Télécharger le PDF
-              </a>`
-            );
-            submitBtn.disabled = false;
+    // ── Construction d'un item de résultat ──────────────────────────
+    function createResultItem(nom) {
+      const el = document.createElement('div');
+      el.className = 'result-item';
+      el.innerHTML = `
+        <span class="result-name">${escHtml(nom)}</span>
+        <span class="result-status waiting">En attente</span>
+      `;
+      resultsList.appendChild(el);
+      return el;
+    }
 
-          } else if (data.status === 'failed') {
-            clearInterval(pollTimer);
-            showStatus('error', 'Échec',
-              data.message || 'La génération a échoué. Vérifiez les logs serveur.');
-            submitBtn.disabled = false;
-          }
-          // sinon : toujours in-progress → on continue de poller
+    function setItemStatus(el, status, downloadUrl) {
+      const st = el.querySelector('.result-status');
+      // Supprimer l'ancien lien éventuel
+      const existing = el.querySelector('.result-download');
+      if (existing) existing.remove();
 
-        } catch (err) {
-          clearInterval(pollTimer);
-          showStatus('error', 'Erreur réseau',
-            'Impossible de vérifier l\'état du job.');
-          submitBtn.disabled = false;
+      if (status === 'running') {
+        st.className = 'result-status running';
+        st.innerHTML = '<span class="spinner"></span>En cours';
+      } else if (status === 'done') {
+        st.className = 'result-status done';
+        st.textContent = '✓ Prêt';
+        if (downloadUrl) {
+          const a = document.createElement('a');
+          a.className = 'result-download';
+          a.href = downloadUrl;
+          a.download = '';
+          a.textContent = '↓ PDF';
+          el.appendChild(a);
         }
-      }, 3000);
+      } else if (status === 'failed') {
+        st.className = 'result-status failed';
+        st.textContent = 'Échec';
+      }
+    }
+
+    function updateProgress() {
+      const total = activeJobs.length;
+      const done  = activeJobs.filter(j => j.status === 'done' || j.status === 'failed').length;
+      progressBar.style.width = total ? `${(done / total) * 100}%` : '0%';
+      if (done === total && total > 0) {
+        setTimeout(() => { progressWrap.classList.remove('visible'); }, 1200);
+        submitBtn.disabled = false;
+        addNameBtn.disabled = false;
+      }
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     // ── Soumission du formulaire ─────────────────────────────────────
@@ -404,49 +584,105 @@
       e.preventDefault();
       if (pollTimer) clearInterval(pollTimer);
 
-      const nom  = document.getElementById('nom').value.trim();
-      const date = document.getElementById('date').value.trim();
+      const date  = document.getElementById('date').value.trim();
+      const names = getNames();
 
-      if (!nom || !date) {
-        showStatus('error', 'Champs requis',
-          'Veuillez renseigner le nom et la date.');
+      if (!date) {
+        document.getElementById('date').focus();
+        return;
+      }
+      if (names.length === 0) {
+        namesList.querySelector('input')?.focus();
         return;
       }
 
-      submitBtn.disabled = true;
-      showStatus('waiting', 'Soumission',
-        '<span class="spinner"></span>Envoi du job à RunScript…');
+      // Préparer l'interface
+      submitBtn.disabled   = true;
+      addNameBtn.disabled  = true;
+      resultsList.innerHTML = '';
+      activeJobs = [];
+      progressWrap.classList.add('visible');
+      progressBar.style.width = '0%';
 
-      try {
-        const res  = await fetch('/generate', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ nom, date })
-        });
-        const data = await res.json();
+      // Créer tous les items de résultat
+      names.forEach(nom => {
+        const el = createResultItem(nom);
+        activeJobs.push({ nom, jobId: null, status: 'pending', el });
+      });
 
-        if (res.ok && data.jobId) {
-          startPolling(data.jobId);
-        } else {
-          showStatus('error', 'Erreur',
-            data.error || 'Une erreur est survenue.',
-            data.details ? `<br><small style="opacity:.6">${data.details}</small>` : '');
-          submitBtn.disabled = false;
+      // Soumettre tous les jobs en parallèle
+      await Promise.all(activeJobs.map(async (job) => {
+        setItemStatus(job.el, 'running');
+        job.status = 'running';
+        try {
+          const res  = await fetch('/generate', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ nom: job.nom, date })
+          });
+          const data = await res.json();
+          if (res.ok && data.jobId) {
+            job.jobId = data.jobId;
+          } else {
+            job.status = 'failed';
+            setItemStatus(job.el, 'failed');
+          }
+        } catch {
+          job.status = 'failed';
+          setItemStatus(job.el, 'failed');
         }
+        updateProgress();
+      }));
 
-      } catch (err) {
-        showStatus('error', 'Erreur réseau',
-          'Impossible de joindre le serveur.');
-        submitBtn.disabled = false;
-      }
+      // Démarrer le polling global
+      startPolling();
     });
 
-    // Réinitialiser le statut quand l'utilisateur modifie un champ
-    ['nom','date'].forEach(id =>
-      document.getElementById(id).addEventListener('input', () => {
-        if (statusBox.classList.contains('error')) resetStatus();
-      })
-    );
+    // ── Polling global (tous les jobs actifs) ────────────────────────
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+
+      pollTimer = setInterval(async () => {
+        const pending = activeJobs.filter(j => j.status === 'running' && j.jobId);
+        if (pending.length === 0) {
+          clearInterval(pollTimer);
+          return;
+        }
+
+        await Promise.all(pending.map(async (job) => {
+          try {
+            const res  = await fetch(`/check-status/${job.jobId}`);
+            const data = await res.json();
+
+            if (data.status === 'done') {
+              job.status = 'done';
+              setItemStatus(job.el, 'done', data.downloadUrl);
+              updateProgress();
+            } else if (data.status === 'failed') {
+              job.status = 'failed';
+              setItemStatus(job.el, 'failed');
+              updateProgress();
+            }
+            // 'in-progress' → on continue de poller
+          } catch {
+            job.status = 'failed';
+            setItemStatus(job.el, 'failed');
+            updateProgress();
+          }
+        }));
+
+        // Arrêter si tous terminés
+        const allDone = activeJobs.every(j => j.status === 'done' || j.status === 'failed');
+        if (allDone) clearInterval(pollTimer);
+
+      }, 3000);
+    }
+
+    // ── Bouton ajouter ───────────────────────────────────────────────
+    addNameBtn.addEventListener('click', () => addNameRow());
+
+    // ── Initialisation : 1 champ au départ ──────────────────────────
+    addNameRow('Marie-Claire Dupont');
   </script>
 
 </body>
